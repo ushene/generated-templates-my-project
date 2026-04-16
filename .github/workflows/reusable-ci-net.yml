@@ -119,6 +119,7 @@ jobs:
       # Step 4: Restore dependencies
       - name: Restore dependencies
         shell: pwsh
+        working-directory: test-dotnet-app
         run: |
           Write-Host "Restoring project dependencies..." -ForegroundColor Cyan
           dotnet restore
@@ -126,6 +127,7 @@ jobs:
       # Step 5: Build application
       - name: Build application
         shell: pwsh
+        working-directory: test-dotnet-app
         run: |
           Write-Host "Building application in $env:BUILD_CONFIGURATION mode..." -ForegroundColor Cyan
           dotnet build --configuration $env:BUILD_CONFIGURATION --no-restore
@@ -134,6 +136,7 @@ jobs:
       - name: Run unit tests
         if: ${{ !inputs.skip-tests }}
         shell: pwsh
+        working-directory: test-dotnet-app
         run: |
           Write-Host "Running unit tests..." -ForegroundColor Cyan
           dotnet test --no-build --configuration $env:BUILD_CONFIGURATION --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
@@ -173,8 +176,8 @@ jobs:
         run: |
           Write-Host "Packaging application..." -ForegroundColor Cyan
           $packageName = "$env:APP_NAME-$env:APP_VERSION"
-                    $publishDir = "publish"
-          dotnet publish --configuration $env:BUILD_CONFIGURATION --output $publishDir --no-build
+          $publishDir = "test-dotnet-app/publish"
+          dotnet publish test-dotnet-app --configuration $env:BUILD_CONFIGURATION --output $publishDir --no-build
           New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
           Compress-Archive -Path "$publishDir\*" -DestinationPath "artifacts\$packageName.zip"
           Write-Host "Package created: artifacts/$packageName.zip" -ForegroundColor Green
