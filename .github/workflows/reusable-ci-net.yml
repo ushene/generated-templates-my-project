@@ -44,13 +44,13 @@ on:
         default: ''
     
     outputs:
-      artifact-version:
+      artifact_version:
         description: 'Version of the built artifact'
         value: ${{ jobs.build.outputs.version }}
-      artifact-name:
+      artifact_name:
         description: 'Name of the artifact'
         value: ${{ jobs.build.outputs.artifact }}
-      build-status:
+      build_status:
         description: 'Build status (success/failure)'
         value: ${{ jobs.build.outputs.status }}
     
@@ -108,7 +108,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ inputs.dotnet-version }}
+          dotnet-version: ${{ inputs.NET-version }}
       
       - name: Display .NET version
         shell: pwsh
@@ -151,14 +151,14 @@ jobs:
       
       # Step 7: Security scanning
       - name: Run SonarQube analysis
-        if: ${{ !inputs.skip-security-scan && secrets.SONAR_TOKEN != '' }}
+        if: ${{ !inputs.skip-security-scan }}
         shell: pwsh
         run: |
           Write-Host "Running SonarQube code quality analysis..." -ForegroundColor Cyan
           Write-Host "SonarQube analysis configured - implement based on your setup" -ForegroundColor Yellow
       
       - name: Run Snyk security scan
-        if: ${{ !inputs.skip-security-scan && secrets.SNYK_TOKEN != '' }}
+        if: ${{ !inputs.skip-security-scan }}
         shell: pwsh
         run: |
           Write-Host "Running Snyk security vulnerability scan..." -ForegroundColor Cyan
@@ -177,7 +177,7 @@ jobs:
           dotnet publish --configuration $env:BUILD_CONFIGURATION --output $publishDir --no-build
           New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
           Compress-Archive -Path "$publishDir\*" -DestinationPath "artifacts\$packageName.zip"
-          Write-Host "âœ“ Package created: artifacts/$packageName.zip" -ForegroundColor Green
+          Write-Host "Package created: artifacts/$packageName.zip" -ForegroundColor Green
       
       # Step 9: Publish to JFrog Artifactory
       - name: Publish to JFrog
@@ -201,7 +201,7 @@ jobs:
           Write-Host "Uploading to $targetPath" -ForegroundColor Cyan
           jfrog rt upload "artifacts/*" "$targetPath" --flat=false --recursive=true
           
-          Write-Host "âœ“ Artifacts published successfully" -ForegroundColor Green
+          Write-Host "Artifacts published successfully" -ForegroundColor Green
       
       # Step 10: Upload build artifacts to GitHub
       - name: Upload artifacts to GitHub
@@ -219,11 +219,9 @@ jobs:
         run: |
           $status = "${{ job.status }}"
           Write-Host "status=$status" >> $env:GITHUB_OUTPUT
-          Write-Host "
-=== Build Summary ===" -ForegroundColor Green
+          Write-Host "`n=== Build Summary ===" -ForegroundColor Green
           Write-Host "Application: $env:APP_NAME" -ForegroundColor Cyan
           Write-Host "Version: $env:APP_VERSION" -ForegroundColor Cyan
           Write-Host "Configuration: $env:BUILD_CONFIGURATION" -ForegroundColor Cyan
           Write-Host "Status: $status" -ForegroundColor Cyan
-          Write-Host "========================
-" -ForegroundColor Green
+          Write-Host "========================`n" -ForegroundColor Green

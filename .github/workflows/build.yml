@@ -7,16 +7,18 @@
 name: Build and Deploy
 
 on:
-  push:
-    branches:
-      - main
-      - develop
-      - 'feature/**'
-      - 'release/**'
-  pull_request:
-    branches:
-      - main
-      - develop
+  # Uncomment below to enable automatic workflow runs on push
+  # push:
+  #   branches:
+  #     - main
+  #     - develop
+  #     - 'feature/**'
+  #     - 'release/**'
+  # Uncomment below to enable automatic workflow runs on pull requests
+  # pull_request:
+  #   branches:
+  #     - main
+  #     - develop
   workflow_dispatch:
     inputs:
       environment:
@@ -88,7 +90,7 @@ jobs:
     uses: ./.github/workflows/reusable-cd-azure.yml
     with:
       app-name: ${{ needs.config.outputs.app-name }}
-      version: ${{ needs.build.outputs.artifact-version }}
+      version: ${{ needs.build.outputs.artifact_version }}
       environment: 'development'
       skip-health-check: false
       resource-group: ${{ vars.DEV_RESOURCE_GROUP }}
@@ -104,7 +106,7 @@ jobs:
     uses: ./.github/workflows/reusable-cd-azure.yml
     with:
       app-name: ${{ needs.config.outputs.app-name }}
-      version: ${{ needs.build.outputs.artifact-version }}
+      version: ${{ needs.build.outputs.artifact_version }}
       environment: 'staging'
       skip-health-check: false
       resource-group: ${{ vars.STAGING_RESOURCE_GROUP }}
@@ -120,7 +122,7 @@ jobs:
     uses: ./.github/workflows/reusable-cd-azure.yml
     with:
       app-name: ${{ needs.config.outputs.app-name }}
-      version: ${{ needs.build.outputs.artifact-version }}
+      version: ${{ needs.build.outputs.artifact_version }}
       environment: 'production'
       skip-health-check: false
       resource-group: ${{ vars.PROD_RESOURCE_GROUP }}
