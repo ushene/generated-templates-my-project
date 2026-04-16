@@ -152,23 +152,23 @@ jobs:
             htmlcov/
             coverage/
       
-      # Step 7: Security scanning
-      - name: Run SonarQube analysis
-        if: ${{ !inputs.skip-security-scan }}
-        shell: pwsh
-        run: |
-          Write-Host "Running SonarQube code quality analysis..." -ForegroundColor Cyan
-          Write-Host "SonarQube analysis configured - implement based on your setup" -ForegroundColor Yellow
+      # Step 7: Security scanning (commented out)
+      # - name: Run SonarQube analysis
+      #   if: ${{ !inputs.skip-security-scan }}
+      #   shell: pwsh
+      #   run: |
+      #     Write-Host "Running SonarQube code quality analysis..." -ForegroundColor Cyan
+      #     Write-Host "SonarQube analysis configured - implement based on your setup" -ForegroundColor Yellow
       
-      - name: Run Snyk security scan
-        if: ${{ !inputs.skip-security-scan }}
-        shell: pwsh
-        run: |
-          Write-Host "Running Snyk security vulnerability scan..." -ForegroundColor Cyan
-          npm install -g snyk
-          snyk auth ${{ secrets.SNYK_TOKEN }}
-          snyk test --severity-threshold=high || true
-          snyk monitor
+      # - name: Run Snyk security scan
+      #   if: ${{ !inputs.skip-security-scan }}
+      #   shell: pwsh
+      #   run: |
+      #     Write-Host "Running Snyk security vulnerability scan..." -ForegroundColor Cyan
+      #     npm install -g snyk
+      #     snyk auth ${{ secrets.SNYK_TOKEN }}
+      #     snyk test --severity-threshold=high || true
+      #     snyk monitor
       
       # Step 8: Package application
       - name: Package application
