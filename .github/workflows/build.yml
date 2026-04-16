@@ -82,50 +82,53 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
   
-  # Job 2: Deploy to development (automatic on develop branch)
-  deploy-dev:
-    name: Deploy to Development
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    needs: [config, build]
-    uses: ./.github/workflows/reusable-cd-azure.yml
-    with:
-      app-name: ${{ needs.config.outputs.app-name }}
-      version: ${{ needs.build.outputs.artifact_version }}
-      environment: 'development'
-      skip-health-check: false
-      resource-group: ${{ vars.DEV_RESOURCE_GROUP }}
-      resource-name: ${{ vars.DEV_RESOURCE_NAME }}
-      resource-type: 'webapp'
-    secrets: inherit
+  # Deployment jobs commented out - waiting for Azure quota approval
+  # Uncomment these jobs once Azure B1 VM quota is approved
   
-  # Job 3: Deploy to staging (automatic on main branch)
-  deploy-staging:
-    name: Deploy to Staging
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [config, build]
-    uses: ./.github/workflows/reusable-cd-azure.yml
-    with:
-      app-name: ${{ needs.config.outputs.app-name }}
-      version: ${{ needs.build.outputs.artifact_version }}
-      environment: 'staging'
-      skip-health-check: false
-      resource-group: ${{ vars.STAGING_RESOURCE_GROUP }}
-      resource-name: ${{ vars.STAGING_RESOURCE_NAME }}
-      resource-type: 'webapp'
-    secrets: inherit
+  # # Job 2: Deploy to development (automatic on develop branch)
+  # deploy-dev:
+  #   name: Deploy to Development
+  #   if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+  #   needs: [config, build]
+  #   uses: ./.github/workflows/reusable-cd-azure.yml
+  #   with:
+  #     app-name: ${{ needs.config.outputs.app-name }}
+  #     version: ${{ needs.build.outputs.artifact_version }}
+  #     environment: 'development'
+  #     skip-health-check: false
+  #     resource-group: ${{ vars.DEV_RESOURCE_GROUP }}
+  #     resource-name: ${{ vars.DEV_RESOURCE_NAME }}
+  #     resource-type: 'webapp'
+  #   secrets: inherit
   
-  # Job 4: Deploy to production (manual trigger only)
-  deploy-production:
-    name: Deploy to Production
-    if: inputs.environment == 'production'
-    needs: [config, build]
-    uses: ./.github/workflows/reusable-cd-azure.yml
-    with:
-      app-name: ${{ needs.config.outputs.app-name }}
-      version: ${{ needs.build.outputs.artifact_version }}
-      environment: 'production'
-      skip-health-check: false
-      resource-group: ${{ vars.PROD_RESOURCE_GROUP }}
-      resource-name: ${{ vars.PROD_RESOURCE_NAME }}
-      resource-type: 'webapp'
-    secrets: inherit
+  # # Job 3: Deploy to staging (automatic on main branch)
+  # deploy-staging:
+  #   name: Deploy to Staging
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #   needs: [config, build]
+  #   uses: ./.github/workflows/reusable-cd-azure.yml
+  #   with:
+  #     app-name: ${{ needs.config.outputs.app-name }}
+  #     version: ${{ needs.build.outputs.artifact_version }}
+  #     environment: 'staging'
+  #     skip-health-check: false
+  #     resource-group: ${{ vars.STAGING_RESOURCE_GROUP }}
+  #     resource-name: ${{ vars.STAGING_RESOURCE_NAME }}
+  #     resource-type: 'webapp'
+  #   secrets: inherit
+  
+  # # Job 4: Deploy to production (manual trigger only)
+  # deploy-production:
+  #   name: Deploy to Production
+  #   if: inputs.environment == 'production'
+  #   needs: [config, build]
+  #   uses: ./.github/workflows/reusable-cd-azure.yml
+  #   with:
+  #     app-name: ${{ needs.config.outputs.app-name }}
+  #     version: ${{ needs.build.outputs.artifact_version }}
+  #     environment: 'production'
+  #     skip-health-check: false
+  #     resource-group: ${{ vars.PROD_RESOURCE_GROUP }}
+  #     resource-name: ${{ vars.PROD_RESOURCE_NAME }}
+  #     resource-type: 'webapp'
+  #   secrets: inherit
