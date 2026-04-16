@@ -1,0 +1,108 @@
+﻿# Main Build Workflow
+# Project: my-dotnet-app
+# Language: .NET
+# Deployment: Azure
+# Purpose: Orchestrates CI/CD using reusable workflows
+
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'release/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deploy to environment'
+        required: false
+        type: choice
+        options:
+          - none
+          - development
+          - staging
+          - production
+        default: 'none'
+      skip_tests:
+        description: 'Skip running tests'
+        required: false
+        type: boolean
+        default: false
+
+# Global environment variables
+env:
+  APP_NAME: 'MyTestApp'
+  JFROG_REPOSITORY: 'my-app-local'
+
+jobs:
+  # Job 1: Build using reusable CI workflow
+  build:
+    name: Build Application
+    uses: ./.github/workflows/reusable-ci-NET.yml
+    with:
+      app-name: ${{ env.APP_NAME }}
+      build-configuration: 'Release'
+      NET-version: '8.x}'
+      skip-tests: ${{ inputs.skip_tests || false }}
+      skip-security-scan: false
+      jfrog-repository: ${{ env.JFROG_REPOSITORY }}
+    secrets:
+      JFROG_URL: ${{ secrets.JFROG_URL }}
+      JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
+      JFROG_PASSWORD: ${{ secrets.JFROG_PASSWORD }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+  
+  # Job 2: Deploy to development (automatic on develop branch)
+  deploy-dev:
+    name: Deploy to Development
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    needs: build
+    uses: ./.github/workflows/reusable-cd-azure.yml
+    with:
+      app-name: ${{ env.APP_NAME }}
+      version: ${{ needs.build.outputs.artifact-version }}
+      environment: 'development'
+      skip-health-check: false
+      resource-group: ${{ vars.DEV_RESOURCE_GROUP }}
+      resource-name: ${{ vars.DEV_RESOURCE_NAME }}
+      resource-type: 'webapp'
+    secrets: inherit
+  
+  # Job 3: Deploy to staging (automatic on main branch)
+  deploy-staging:
+    name: Deploy to Staging
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build
+    uses: ./.github/workflows/reusable-cd-azure.yml
+    with:
+      app-name: ${{ env.APP_NAME }}
+      version: ${{ needs.build.outputs.artifact-version }}
+      environment: 'staging'
+      skip-health-check: false
+      resource-group: ${{ vars.STAGING_RESOURCE_GROUP }}
+      resource-name: ${{ vars.STAGING_RESOURCE_NAME }}
+      resource-type: 'webapp'
+    secrets: inherit
+  
+  # Job 4: Deploy to production (manual trigger only)
+  deploy-production:
+    name: Deploy to Production
+    if: inputs.environment == 'production'
+    needs: build
+    uses: ./.github/workflows/reusable-cd-azure.yml
+    with:
+      app-name: ${{ env.APP_NAME }}
+      version: ${{ needs.build.outputs.artifact-version }}
+      environment: 'production'
+      skip-health-check: false
+      resource-group: ${{ vars.PROD_RESOURCE_GROUP }}
+      resource-name: ${{ vars.PROD_RESOURCE_NAME }}
+      resource-type: 'webapp'
+    secrets: inherit

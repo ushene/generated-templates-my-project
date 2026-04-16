@@ -1,0 +1,181 @@
+﻿# CI Pipeline Template
+# Generated for: Azure App Service (.NET)
+# Project: my-dotnet-app
+# Description: Build, test, scan, and publish artifacts to JFrog
+
+name: CI - Build and Test
+
+on:
+  push:
+    branches:
+      # Configure branches that should trigger CI builds
+      - main
+      - develop
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip running tests'
+        required: false
+        type: boolean
+        default: false
+
+# Environment variables - customize these for your project
+env:
+  # Build configuration
+  BUILD_CONFIGURATION: 'Release'
+  
+  # JFrog Artifactory settings
+  JFROG_URL: ${{ secrets.JFROG_URL }}               # JFrog Artifactory URL
+  JFROG_REPOSITORY: ${{ secrets.JFROG_REPOSITORY }} # Target repository name
+  JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}     # JFrog username
+  JFROG_PASSWORD: ${{ secrets.JFROG_PASSWORD }}     # JFrog password or API token
+  
+  # Application-specific settings
+  APP_NAME: 'my-dotnet-app'
+  APP_VERSION: ${{ github.run_number }}
+  
+  # Security scanning settings
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}           # SonarQube token for code analysis
+  SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}             # Snyk token for vulnerability scanning
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      # Step 1: Checkout source code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for better analysis
+      
+      # Step 2: Setup build environment
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.x'  # Specify your .NET version
+      
+      - name: Display .NET version
+        shell: pwsh
+        run: |
+          Write-Host ".NET SDK Version:" -ForegroundColor Cyan
+          dotnet --version
+      
+      # Step 3: Restore dependencies
+      - name: Restore dependencies
+        shell: pwsh
+        run: |
+          Write-Host "Restoring project dependencies..." -ForegroundColor Cyan
+          dotnet restore
+      
+      # Step 4: Build application
+      - name: Build application
+        shell: pwsh
+        run: |
+          Write-Host "Building application in $env:BUILD_CONFIGURATION mode..." -ForegroundColor Cyan
+          dotnet build --configuration $env:BUILD_CONFIGURATION --no-restore
+      
+      # Step 5: Run unit tests
+      - name: Run unit tests
+        if: ${{ !inputs.skip_tests }}
+        shell: pwsh
+        run: |
+          Write-Host "Running unit tests..." -ForegroundColor Cyan
+          dotnet test --no-build --configuration $env:BUILD_CONFIGURATION --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
+      
+      - name: Publish test results
+        if: always() && !inputs.skip_tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/test-results.trx'
+      
+      # Step 6: Code quality and security scanning
+      - name: Run SonarQube analysis
+        if: env.SONAR_TOKEN != ''
+        shell: pwsh
+        run: |
+          Write-Host "Running SonarQube code quality analysis..." -ForegroundColor Cyan
+          # Install SonarScanner if needed
+          # Configure and run based on your SonarQube setup
+          Write-Host "SonarQube analysis configured - implement based on your setup" -ForegroundColor Yellow
+      
+      - name: Run Snyk security scan
+        if: env.SNYK_TOKEN != ''
+        shell: pwsh
+        run: |
+          Write-Host "Running Snyk security vulnerability scan..." -ForegroundColor Cyan
+          # Install Snyk CLI
+          npm install -g snyk
+          snyk auth $env:SNYK_TOKEN
+          snyk test --severity-threshold=high
+          snyk monitor
+      
+      # Step 7: Package application
+      - name: Package application
+        shell: pwsh
+        run: |
+          Write-Host "Packaging application..." -ForegroundColor Cyan
+          $packageName = "$env:APP_NAME-$env:APP_VERSION"
+          
+          # Package application
+          $publishDir = "publish"
+          dotnet publish --configuration $env:BUILD_CONFIGURATION --output $publishDir --no-build
+          
+          # Create deployment package
+          New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
+          Compress-Archive -Path "$publishDir\*" -DestinationPath "artifacts\$packageName.zip"
+          Write-Host "âœ“ Package created: artifacts\$packageName.zip" -ForegroundColor Green
+      
+      # Step 8: Publish to JFrog Artifactory
+      - name: Publish to JFrog
+        shell: pwsh
+        run: |
+          Write-Host "Publishing artifacts to JFrog Artifactory..." -ForegroundColor Cyan
+          
+          # Setup JFrog CLI (if not already available)
+          if (-not (Get-Command jfrog -ErrorAction SilentlyContinue)) {
+            Write-Host "Installing JFrog CLI..." -ForegroundColor Yellow
+            curl -fL https://install-cli.jfrog.io | sh
+            sudo mv jfrog /usr/local/bin/
+          }
+          
+          # Configure JFrog CLI
+          jfrog config add artifactory --url="$env:JFROG_URL" --user="$env:JFROG_USERNAME" --password="$env:JFROG_PASSWORD" --interactive=false
+          
+          # Upload artifacts
+          $artifactPath = "artifacts/*"
+          $targetPath = "$env:JFROG_REPOSITORY/$env:APP_NAME/$env:APP_VERSION/"
+          
+          Write-Host "Uploading from $artifactPath to $targetPath" -ForegroundColor Cyan
+          jfrog rt upload "$artifactPath" "$targetPath" --flat=false --recursive=true
+          
+          Write-Host "âœ“ Artifacts published successfully" -ForegroundColor Green
+      
+      # Step 9: Upload build artifacts (backup)
+      - name: Upload artifacts to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-${{ github.run_number }}
+          path: artifacts/
+          retention-days: 30
+      
+      # Step 10: Build summary
+      - name: Build summary
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "
+=== Build Summary ===" -ForegroundColor Green
+          Write-Host "Application: $env:APP_NAME" -ForegroundColor Cyan
+          Write-Host "Version: $env:APP_VERSION" -ForegroundColor Cyan
+          Write-Host "Configuration: $env:BUILD_CONFIGURATION" -ForegroundColor Cyan
+          Write-Host "Build Status: ${{ job.status }}" -ForegroundColor Cyan
+          Write-Host "========================
+" -ForegroundColor Green

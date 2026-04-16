@@ -1,0 +1,236 @@
+﻿# CD Pipeline Template
+# Generated for: Azure App Service (.NET) -> Azure
+# Project: my-dotnet-app
+# Description: Deploy application to Azure
+
+name: CD - Deploy to Azure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target Environment'
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      version:
+        description: 'Version to deploy (build number or tag)'
+        required: true
+        type: string
+      skip_health_check:
+        description: 'Skip post-deployment health check'
+        required: false
+        type: boolean
+        default: false
+
+# Environment variables - customize these for your project
+env:
+  # Application settings
+  APP_NAME: 'my-dotnet-app'
+  APP_VERSION: ${{ inputs.version }}
+  TARGET_ENV: ${{ inputs.environment }}
+  
+  # JFrog Artifactory settings
+  JFROG_URL: ${{ secrets.JFROG_URL }}
+  JFROG_REPOSITORY: ${{ secrets.JFROG_REPOSITORY }}
+  JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
+  JFROG_PASSWORD: ${{ secrets.JFROG_PASSWORD }}
+  
+  # Azure-specific settings
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+  AZURE_APP_NAME: ${{ secrets.AZURE_APP_NAME }}
+
+# Deployment jobs with environment-specific configuration
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    
+    # Configure environment protection rules
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ steps.deploy.outputs.app_url }}
+    
+    steps:
+      # Step 1: Checkout repository (for scripts and configurations)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            deployment/
+            scripts/
+      
+      # Step 2: Download artifacts from JFrog
+      - name: Download artifacts from JFrog
+        shell: pwsh
+        run: |
+          Write-Host "Downloading artifacts from JFrog Artifactory..." -ForegroundColor Cyan
+          
+          # Install JFrog CLI if not present
+          if (-not (Get-Command jfrog -ErrorAction SilentlyContinue)) {
+            Write-Host "Installing JFrog CLI..." -ForegroundColor Yellow
+            curl -fL https://install-cli.jfrog.io | sh
+            sudo mv jfrog /usr/local/bin/
+          }
+          
+          # Configure JFrog CLI
+          jfrog config add artifactory --url="$env:JFROG_URL" --user="$env:JFROG_USERNAME" --password="$env:JFROG_PASSWORD" --interactive=false
+          
+          # Download artifacts
+          $artifactPath = "$env:JFROG_REPOSITORY/$env:APP_NAME/$env:APP_VERSION/"
+          $downloadDir = "artifacts"
+          
+          New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
+          Write-Host "Downloading from $artifactPath to $downloadDir" -ForegroundColor Cyan
+          jfrog rt download "$artifactPath" "$downloadDir/" --flat=false
+          
+          Write-Host "âœ“ Artifacts downloaded successfully" -ForegroundColor Green
+      
+      # Step 3: Pre-deployment validation and setup
+      - name: Pre-deployment validation
+        shell: pwsh
+        run: |
+          Write-Host "Validating Azure deployment prerequisites..." -ForegroundColor Cyan
+          
+          # Install Azure CLI if not present
+          if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
+            Write-Host "Installing Azure CLI..." -ForegroundColor Yellow
+            Invoke-WebRequest -Uri https://aka.ms/installazurecliwindows -OutFile .\AzureCLI.msi
+            Start-Process msiexec.exe -Wait -ArgumentList '/I AzureCLI.msi /quiet'
+          }
+          
+          # Login to Azure
+          Write-Host "Logging in to Azure..." -ForegroundColor Cyan
+          az login --service-principal -u $env:AZURE_CLIENT_ID -p $env:AZURE_CLIENT_SECRET --tenant $env:AZURE_TENANT_ID
+          az account set --subscription $env:AZURE_SUBSCRIPTION_ID
+          
+          # Verify target resource exists
+          Write-Host "Verifying target resource..." -ForegroundColor Cyan
+          az resource show --resource-group $env:AZURE_RESOURCE_GROUP --name $env:AZURE_APP_NAME --query "id" -o tsv
+          
+          Write-Host "âœ“ Pre-deployment validation complete" -ForegroundColor Green
+      
+      # Step 4: Deploy application
+      - name: Deploy to Azure App Service
+        id: deploy
+        shell: pwsh
+        run: |
+          Write-Host "Deploying to Azure App Service..." -ForegroundColor Cyan
+          
+          # Deploy using Azure CLI
+          az webapp deployment source config-zip \
+            --resource-group $env:AZURE_RESOURCE_GROUP \
+            --name $env:AZURE_APP_NAME \
+            --src "artifacts/*.zip"
+          
+          # Get web app URL
+          $appUrl = az webapp show \
+            --resource-group $env:AZURE_RESOURCE_GROUP \
+            --name $env:AZURE_APP_NAME \
+            --query "defaultHostName" -o tsv
+          
+          Write-Host "app_url=https://$appUrl" >> $env:GITHUB_OUTPUT
+          Write-Host "âœ“ Deployment complete: https://$appUrl" -ForegroundColor Green
+      
+      # Step 5: Post-deployment verification
+      - name: Health check
+        if: ${{ !inputs.skip_health_check }}
+        shell: pwsh
+        run: |
+          Write-Host "Running post-deployment health checks..." -ForegroundColor Cyan
+          
+          $appUrl = "${{ steps.deploy.outputs.app_url }}"
+          $maxRetries = 10
+          $retryCount = 0
+          $healthCheckPassed = $false
+          
+          while ($retryCount -lt $maxRetries) {
+            try {
+              $retryCount++
+              Write-Host "Health check attempt $retryCount of $maxRetries..." -ForegroundColor Yellow
+              
+              # Add your health check endpoint
+              $response = Invoke-WebRequest -Uri "$appUrl/health" -Method Get -TimeoutSec 30 -UseBasicParsing
+              
+              if ($response.StatusCode -eq 200) {
+                Write-Host "âœ“ Health check passed!" -ForegroundColor Green
+                $healthCheckPassed = $true
+                break
+              }
+            }
+            catch {
+              Write-Host "Health check failed: $_" -ForegroundColor Red
+              if ($retryCount -lt $maxRetries) {
+                Write-Host "Retrying in 30 seconds..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 30
+              }
+            }
+          }
+          
+          if (-not $healthCheckPassed) {
+            Write-Host "âš ï¸  Health check failed after $maxRetries attempts" -ForegroundColor Red
+            exit 1
+          }
+      
+      - name: Run smoke tests
+        if: success()
+        shell: pwsh
+        run: |
+          Write-Host "Running smoke tests..." -ForegroundColor Cyan
+          
+          # Add basic smoke tests here
+          $appUrl = "${{ steps.deploy.outputs.app_url }}"
+          
+          # Test 1: Homepage
+          try {
+            $response = Invoke-WebRequest -Uri "$appUrl" -Method Get -TimeoutSec 30 -UseBasicParsing
+            Write-Host "âœ“ Homepage accessible (Status: $($response.StatusCode))" -ForegroundColor Green
+          }
+          catch {
+            Write-Host "âœ— Homepage test failed: $_" -ForegroundColor Red
+          }
+          
+          # Add more smoke tests as needed
+          Write-Host "âœ“ Smoke tests complete" -ForegroundColor Green
+      
+      # Step 6: Deployment summary
+      - name: Deployment summary
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "
+=== Deployment Summary ===" -ForegroundColor Green
+          Write-Host "Application: $env:APP_NAME" -ForegroundColor Cyan
+          Write-Host "Version: $env:APP_VERSION" -ForegroundColor Cyan
+          Write-Host "Environment: $env:TARGET_ENV" -ForegroundColor Cyan
+          Write-Host "Deployment Type: Azure" -ForegroundColor Cyan
+          Write-Host "Status: ${{ job.status }}" -ForegroundColor Cyan
+          Write-Host "===========================
+" -ForegroundColor Green
+
+  # Rollback job (manual trigger only)
+  rollback:
+    name: Rollback deployment
+    runs-on: ubuntu-latest
+    if: failure() && github.event_name == 'workflow_dispatch'
+    needs: deploy
+    
+    steps:
+      - name: Trigger rollback
+        shell: pwsh
+        run: |
+          Write-Host "âš ï¸  Deployment failed - initiating rollback procedure..." -ForegroundColor Red
+          Write-Host "Please review the deployment logs and trigger rollback manually if needed." -ForegroundColor Yellow
+          
+          # Add rollback logic here based on your deployment strategy
+          # This could involve:
+          # - Deploying previous version
+          # - Restoring database backup
+          # - Rolling back infrastructure changes

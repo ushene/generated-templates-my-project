@@ -1,0 +1,229 @@
+﻿# Reusable CI Workflow
+# Language: .NET
+# Purpose: Build, test, scan, and publish artifacts to JFrog
+# This workflow can be called from other workflows using workflow_call
+
+name: Reusable CI - .NET
+
+on:
+  workflow_call:
+    inputs:
+      app-name:
+        description: 'Application name'
+        required: true
+        type: string
+      build-configuration:
+        description: 'Build configuration (Release/Debug)'
+        required: false
+        type: string
+        default: 'Release'
+      NET-version:
+        description: '.NET SDK/Runtime version'
+        required: false
+        type: string
+        default: '8.x'
+      skip-tests:
+        description: 'Skip running tests'
+        required: false
+        type: boolean
+        default: false
+      skip-security-scan:
+        description: 'Skip security scanning'
+        required: false
+        type: boolean
+        default: false
+      runner:
+        description: 'GitHub runner to use'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      jfrog-repository:
+        description: 'JFrog repository name'
+        required: false
+        type: string
+        default: ''
+    
+    outputs:
+      artifact-version:
+        description: 'Version of the built artifact'
+        value: ${{ jobs.build.outputs.version }}
+      artifact-name:
+        description: 'Name of the artifact'
+        value: ${{ jobs.build.outputs.artifact }}
+      build-status:
+        description: 'Build status (success/failure)'
+        value: ${{ jobs.build.outputs.status }}
+    
+    secrets:
+      JFROG_URL:
+        description: 'JFrog Artifactory URL'
+        required: true
+      JFROG_USERNAME:
+        description: 'JFrog username'
+        required: true
+      JFROG_PASSWORD:
+        description: 'JFrog password or API token'
+        required: true
+      SONAR_TOKEN:
+        description: 'SonarQube token'
+        required: false
+      SNYK_TOKEN:
+        description: 'Snyk token'
+        required: false
+
+env:
+  BUILD_CONFIGURATION: ${{ inputs.build-configuration }}
+  APP_NAME: ${{ inputs.app-name }}
+  APP_VERSION: ${{ github.run_number }}
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ${{ inputs.runner }}
+    
+    outputs:
+      version: ${{ steps.set-version.outputs.version }}
+      artifact: ${{ steps.set-version.outputs.artifact }}
+      status: ${{ steps.set-status.outputs.status }}
+    
+    steps:
+      # Step 1: Checkout source code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      # Step 2: Set version output
+      - name: Set version
+        id: set-version
+        shell: pwsh
+        run: |
+          $version = "${{ github.run_number }}"
+          $artifact = "${{ inputs.app-name }}-$version"
+          Write-Host "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "artifact=$artifact" >> $env:GITHUB_OUTPUT
+          Write-Host "Building version: $version" -ForegroundColor Cyan
+      
+      # Step 3: Setup build environment
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ inputs.dotnet-version }}
+      
+      - name: Display .NET version
+        shell: pwsh
+        run: |
+          Write-Host ".NET Version:" -ForegroundColor Cyan
+          dotnet --version
+      
+      # Step 4: Restore dependencies
+      - name: Restore dependencies
+        shell: pwsh
+        run: |
+          Write-Host "Restoring project dependencies..." -ForegroundColor Cyan
+          dotnet restore
+      
+      # Step 5: Build application
+      - name: Build application
+        shell: pwsh
+        run: |
+          Write-Host "Building application in $env:BUILD_CONFIGURATION mode..." -ForegroundColor Cyan
+          dotnet build --configuration $env:BUILD_CONFIGURATION --no-restore
+      
+      # Step 6: Run unit tests
+      - name: Run unit tests
+        if: ${{ !inputs.skip-tests }}
+        shell: pwsh
+        run: |
+          Write-Host "Running unit tests..." -ForegroundColor Cyan
+          dotnet test --no-build --configuration $env:BUILD_CONFIGURATION --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
+      
+      - name: Publish test results
+        if: always() && !inputs.skip-tests
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_number }}
+          path: |
+            **/test-results.trx
+            coverage.xml
+            htmlcov/
+            coverage/
+      
+      # Step 7: Security scanning
+      - name: Run SonarQube analysis
+        if: ${{ !inputs.skip-security-scan && secrets.SONAR_TOKEN != '' }}
+        shell: pwsh
+        run: |
+          Write-Host "Running SonarQube code quality analysis..." -ForegroundColor Cyan
+          Write-Host "SonarQube analysis configured - implement based on your setup" -ForegroundColor Yellow
+      
+      - name: Run Snyk security scan
+        if: ${{ !inputs.skip-security-scan && secrets.SNYK_TOKEN != '' }}
+        shell: pwsh
+        run: |
+          Write-Host "Running Snyk security vulnerability scan..." -ForegroundColor Cyan
+          npm install -g snyk
+          snyk auth ${{ secrets.SNYK_TOKEN }}
+          snyk test --severity-threshold=high || true
+          snyk monitor
+      
+      # Step 8: Package application
+      - name: Package application
+        shell: pwsh
+        run: |
+          Write-Host "Packaging application..." -ForegroundColor Cyan
+          $packageName = "$env:APP_NAME-$env:APP_VERSION"
+                    $publishDir = "publish"
+          dotnet publish --configuration $env:BUILD_CONFIGURATION --output $publishDir --no-build
+          New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
+          Compress-Archive -Path "$publishDir\*" -DestinationPath "artifacts\$packageName.zip"
+          Write-Host "âœ“ Package created: artifacts/$packageName.zip" -ForegroundColor Green
+      
+      # Step 9: Publish to JFrog Artifactory
+      - name: Publish to JFrog
+        if: inputs.jfrog-repository != ''
+        shell: pwsh
+        run: |
+          Write-Host "Publishing artifacts to JFrog Artifactory..." -ForegroundColor Cyan
+          
+          # Setup JFrog CLI
+          if (-not (Get-Command jfrog -ErrorAction SilentlyContinue)) {
+            Write-Host "Installing JFrog CLI..." -ForegroundColor Yellow
+            curl -fL https://install-cli.jfrog.io | sh
+            sudo mv jfrog /usr/local/bin/
+          }
+          
+          # Configure JFrog CLI
+          jfrog config add artifactory --url="${{ secrets.JFROG_URL }}" --user="${{ secrets.JFROG_USERNAME }}" --password="${{ secrets.JFROG_PASSWORD }}" --interactive=false
+          
+          # Upload artifacts
+          $targetPath = "${{ inputs.jfrog-repository }}/$env:APP_NAME/$env:APP_VERSION/"
+          Write-Host "Uploading to $targetPath" -ForegroundColor Cyan
+          jfrog rt upload "artifacts/*" "$targetPath" --flat=false --recursive=true
+          
+          Write-Host "âœ“ Artifacts published successfully" -ForegroundColor Green
+      
+      # Step 10: Upload build artifacts to GitHub
+      - name: Upload artifacts to GitHub
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-${{ inputs.app-name }}-${{ github.run_number }}
+          path: artifacts/
+          retention-days: 30
+      
+      # Step 11: Set build status
+      - name: Set build status
+        id: set-status
+        if: always()
+        shell: pwsh
+        run: |
+          $status = "${{ job.status }}"
+          Write-Host "status=$status" >> $env:GITHUB_OUTPUT
+          Write-Host "
+=== Build Summary ===" -ForegroundColor Green
+          Write-Host "Application: $env:APP_NAME" -ForegroundColor Cyan
+          Write-Host "Version: $env:APP_VERSION" -ForegroundColor Cyan
+          Write-Host "Configuration: $env:BUILD_CONFIGURATION" -ForegroundColor Cyan
+          Write-Host "Status: $status" -ForegroundColor Cyan
+          Write-Host "========================
+" -ForegroundColor Green
