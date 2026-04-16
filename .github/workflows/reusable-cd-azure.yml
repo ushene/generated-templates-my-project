@@ -119,7 +119,7 @@ jobs:
           New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
           jfrog rt download "$artifactPath" "artifacts/" --flat=false
           
-          Write-Host "âœ“ Artifacts downloaded" -ForegroundColor Green
+          Write-Host "Artifacts downloaded" -ForegroundColor Green
       
       # Step 3: Pre-deployment steps
       - name: Azure Login
@@ -128,7 +128,7 @@ jobs:
           Write-Host "Logging in to Azure..." -ForegroundColor Cyan
           az login --service-principal -u ${{ secrets.AZURE_CLIENT_ID }} -p ${{ secrets.AZURE_CLIENT_SECRET }} --tenant ${{ secrets.AZURE_TENANT_ID }}
           az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          Write-Host "âœ“ Azure login successful" -ForegroundColor Green
+          Write-Host "Azure login successful" -ForegroundColor Green
       
       # Step 4: Deploy application
       - name: Deploy to Azure
@@ -167,7 +167,7 @@ jobs:
             Write-Host "app_url=https://$appUrl" >> $env:GITHUB_OUTPUT
           }
           
-          Write-Host "âœ“ Deployment complete" -ForegroundColor Green
+          Write-Host "Deployment complete" -ForegroundColor Green
       
       # Step 5: Health check
       - name: Health check
@@ -188,7 +188,7 @@ jobs:
               $response = Invoke-WebRequest -Uri "$appUrl/health" -Method Get -TimeoutSec 30
               
               if ($response.StatusCode -eq 200) {
-                Write-Host "âœ“ Health check passed!" -ForegroundColor Green
+                Write-Host "Health check passed!" -ForegroundColor Green
                 break
               }
             }
@@ -196,7 +196,7 @@ jobs:
               if ($retryCount -lt $maxRetries) {
                 Start-Sleep -Seconds 30
               } else {
-                Write-Host "âš ï¸  Health check failed" -ForegroundColor Red
+                Write-Host "Health check failed" -ForegroundColor Red
                 exit 1
               }
             }
