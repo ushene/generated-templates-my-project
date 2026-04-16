@@ -177,7 +177,7 @@ jobs:
           Write-Host "Packaging application..." -ForegroundColor Cyan
           $packageName = "$env:APP_NAME-$env:APP_VERSION"
           $publishDir = "test-dotnet-app/publish"
-          dotnet publish test-dotnet-app --configuration $env:BUILD_CONFIGURATION --output $publishDir --no-build
+          dotnet publish test-dotnet-app/src/MyTestApp.Api/MyTestApp.Api.csproj --configuration $env:BUILD_CONFIGURATION --output $publishDir --no-build
           New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
           Compress-Archive -Path "$publishDir\*" -DestinationPath "artifacts\$packageName.zip"
           Write-Host "Package created: artifacts/$packageName.zip" -ForegroundColor Green
