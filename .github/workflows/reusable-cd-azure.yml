@@ -74,8 +74,6 @@ on:
       AZURE_CLIENT_SECRET:
         description: 'Azure client secret'
         required: true
-      
-      
 
 env:
   APP_NAME: ${{ inputs.app-name }}
@@ -212,11 +210,9 @@ jobs:
         run: |
           $status = "${{ job.status }}"
           Write-Host "status=$status" >> $env:GITHUB_OUTPUT
-          Write-Host "
-=== Deployment Summary ===" -ForegroundColor Green
+          Write-Host "`n=== Deployment Summary ===" -ForegroundColor Green
           Write-Host "Application: ${{ inputs.app-name }}" -ForegroundColor Cyan
           Write-Host "Version: ${{ inputs.version }}" -ForegroundColor Cyan
           Write-Host "Environment: ${{ inputs.environment }}" -ForegroundColor Cyan
           Write-Host "Status: $status" -ForegroundColor Cyan
-          Write-Host "===========================
-" -ForegroundColor Green
+          Write-Host "===========================`n" -ForegroundColor Green
