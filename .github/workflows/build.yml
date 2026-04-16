@@ -35,23 +35,44 @@ on:
         type: boolean
         default: false
 
-# Global environment variables
+# Centralized configuration
 env:
   APP_NAME: 'MyTestApp'
   JFROG_REPOSITORY: 'my-app-local'
+  BUILD_CONFIGURATION: 'Release'
+  DOTNET_VERSION: '8.x'
 
 jobs:
+  # Job 0: Setup configuration (workaround for env limitation in reusable workflows)
+  config:
+    name: Setup Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      app-name: ${{ steps.set-config.outputs.app-name }}
+      jfrog-repository: ${{ steps.set-config.outputs.jfrog-repository }}
+      build-configuration: ${{ steps.set-config.outputs.build-configuration }}
+      dotnet-version: ${{ steps.set-config.outputs.dotnet-version }}
+    steps:
+      - name: Set configuration outputs
+        id: set-config
+        run: |
+          echo "app-name=${{ env.APP_NAME }}" >> $GITHUB_OUTPUT
+          echo "jfrog-repository=${{ env.JFROG_REPOSITORY }}" >> $GITHUB_OUTPUT
+          echo "build-configuration=${{ env.BUILD_CONFIGURATION }}" >> $GITHUB_OUTPUT
+          echo "dotnet-version=${{ env.DOTNET_VERSION }}" >> $GITHUB_OUTPUT
+
   # Job 1: Build using reusable CI workflow
   build:
     name: Build Application
+    needs: config
     uses: ./.github/workflows/reusable-ci-net.yml
     with:
-      app-name: ${{ env.APP_NAME }}
-      build-configuration: 'Release'
-      NET-version: '8.x'
+      app-name: ${{ needs.config.outputs.app-name }}
+      build-configuration: ${{ needs.config.outputs.build-configuration }}
+      NET-version: ${{ needs.config.outputs.dotnet-version }}
       skip-tests: ${{ inputs.skip_tests || false }}
       skip-security-scan: false
-      jfrog-repository: ${{ env.JFROG_REPOSITORY }}
+      jfrog-repository: ${{ needs.config.outputs.jfrog-repository }}
     secrets:
       JFROG_URL: ${{ secrets.JFROG_URL }}
       JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
@@ -63,10 +84,10 @@ jobs:
   deploy-dev:
     name: Deploy to Development
     if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-    needs: build
+    needs: [config, build]
     uses: ./.github/workflows/reusable-cd-azure.yml
     with:
-      app-name: ${{ env.APP_NAME }}
+      app-name: ${{ needs.config.outputs.app-name }}
       version: ${{ needs.build.outputs.artifact-version }}
       environment: 'development'
       skip-health-check: false
@@ -79,10 +100,10 @@ jobs:
   deploy-staging:
     name: Deploy to Staging
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: build
+    needs: [config, build]
     uses: ./.github/workflows/reusable-cd-azure.yml
     with:
-      app-name: ${{ env.APP_NAME }}
+      app-name: ${{ needs.config.outputs.app-name }}
       version: ${{ needs.build.outputs.artifact-version }}
       environment: 'staging'
       skip-health-check: false
@@ -95,10 +116,10 @@ jobs:
   deploy-production:
     name: Deploy to Production
     if: inputs.environment == 'production'
-    needs: build
+    needs: [config, build]
     uses: ./.github/workflows/reusable-cd-azure.yml
     with:
-      app-name: ${{ env.APP_NAME }}
+      app-name: ${{ needs.config.outputs.app-name }}
       version: ${{ needs.build.outputs.artifact-version }}
       environment: 'production'
       skip-health-check: false
