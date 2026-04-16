@@ -108,16 +108,16 @@ jobs:
         run: |
           Write-Host "Downloading artifacts from JFrog..." -ForegroundColor Cyan
           
-          if (-not (Get-Command jfrog -ErrorAction SilentlyContinue)) {
+          if (-not (Get-Command jf -ErrorAction SilentlyContinue)) {
             Write-Host "Installing JFrog CLI..." -ForegroundColor Yellow
-            curl -fL https://install-cli.jfrog.io | sh; sudo mv jfrog /usr/local/bin/
+            curl -fL https://install-cli.jfrog.io | sh
           }
           
-          jfrog config add artifactory --url="${{ secrets.JFROG_URL }}" --user="${{ secrets.JFROG_USERNAME }}" --password="${{ secrets.JFROG_PASSWORD }}" --interactive=false
+          jf config add artifactory --url="${{ secrets.JFROG_URL }}" --user="${{ secrets.JFROG_USERNAME }}" --password="${{ secrets.JFROG_PASSWORD }}" --interactive=false
           
           $artifactPath = "*/${{ inputs.app-name }}/${{ inputs.version }}/"
           New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
-          jfrog rt download "$artifactPath" "artifacts/" --flat=false
+          jf rt download "$artifactPath" "artifacts/" --flat=false
           
           Write-Host "Artifacts downloaded" -ForegroundColor Green
       

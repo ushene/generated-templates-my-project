@@ -190,19 +190,18 @@ jobs:
           Write-Host "Publishing artifacts to JFrog Artifactory..." -ForegroundColor Cyan
           
           # Setup JFrog CLI
-          if (-not (Get-Command jfrog -ErrorAction SilentlyContinue)) {
+          if (-not (Get-Command jf -ErrorAction SilentlyContinue)) {
             Write-Host "Installing JFrog CLI..." -ForegroundColor Yellow
             curl -fL https://install-cli.jfrog.io | sh
-            sudo mv jfrog /usr/local/bin/
           }
           
           # Configure JFrog CLI
-          jfrog config add artifactory --url="${{ secrets.JFROG_URL }}" --user="${{ secrets.JFROG_USERNAME }}" --password="${{ secrets.JFROG_PASSWORD }}" --interactive=false
+          jf config add artifactory --url="${{ secrets.JFROG_URL }}" --user="${{ secrets.JFROG_USERNAME }}" --password="${{ secrets.JFROG_PASSWORD }}" --interactive=false
           
           # Upload artifacts
           $targetPath = "${{ inputs.jfrog-repository }}/$env:APP_NAME/$env:APP_VERSION/"
           Write-Host "Uploading to $targetPath" -ForegroundColor Cyan
-          jfrog rt upload "artifacts/*" "$targetPath" --flat=false --recursive=true
+          jf rt upload "artifacts/*" "$targetPath" --flat=false --recursive=true
           
           Write-Host "Artifacts published successfully" -ForegroundColor Green
       
