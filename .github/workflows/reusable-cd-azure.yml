@@ -139,29 +139,36 @@ jobs:
           
           # Deploy based on resource type
           $resourceType = "${{ inputs.resource-type }}"
+          $resourceGroup = "${{ inputs.resource-group }}"
+          $resourceName = "${{ inputs.resource-name }}"
+          if (-not $resourceGroup) { throw "Azure resource group is required" }
+          if (-not $resourceName) { throw "Azure resource name is required" }
+          
+          $zipFile = Get-ChildItem -Path "artifacts" -Filter "*.zip" | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $zipFile) { throw "No deployment package found in artifacts folder" }
           
           if ($resourceType -eq "webapp") {
             az webapp deployment source config-zip `
-              --resource-group ${{ inputs.resource-group }} `
-              --name ${{ inputs.resource-name }} `
-              --src "artifacts/*.zip"
+              --resource-group $resourceGroup `
+              --name $resourceName `
+              --src "$zipFile"
               
             $appUrl = az webapp show `
-              --resource-group ${{ inputs.resource-group }} `
-              --name ${{ inputs.resource-name }} `
+              --resource-group $resourceGroup `
+              --name $resourceName `
               --query "defaultHostName" -o tsv
               
             Write-Host "app_url=https://$appUrl" >> $env:GITHUB_OUTPUT
           }
           elseif ($resourceType -eq "functionapp") {
             az functionapp deployment source config-zip `
-              --resource-group ${{ inputs.resource-group }} `
-              --name ${{ inputs.resource-name }} `
-              --src "artifacts/*.zip"
+              --resource-group $resourceGroup `
+              --name $resourceName `
+              --src "$zipFile"
               
             $appUrl = az functionapp show `
-              --resource-group ${{ inputs.resource-group }} `
-              --name ${{ inputs.resource-name }} `
+              --resource-group $resourceGroup `
+              --name $resourceName `
               --query "defaultHostName" -o tsv
               
             Write-Host "app_url=https://$appUrl" >> $env:GITHUB_OUTPUT
