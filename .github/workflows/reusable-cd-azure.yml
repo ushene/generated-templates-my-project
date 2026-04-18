@@ -120,8 +120,10 @@ jobs:
           jf config add artifactory --url="${{ secrets.JFROG_URL }}" --user="${{ secrets.JFROG_USERNAME }}" --password="${{ secrets.JFROG_PASSWORD }}" --interactive=false
           
           $artifactPath = "${{ inputs.jfrog-repository }}/${{ inputs.app-name }}/${{ inputs.version }}/"
+          $artifactPattern = "$artifactPath*.zip"
+          Write-Host "Downloading artifact pattern: $artifactPattern" -ForegroundColor Cyan
           New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
-          jf rt download "$artifactPath*" "artifacts/" --flat=true --recursive=true
+          jf rt download "$artifactPattern" "artifacts/" --flat=true --recursive=true
           
           Write-Host "Downloaded artifact files:" -ForegroundColor Cyan
           Get-ChildItem -Path "artifacts" -Recurse | ForEach-Object { Write-Host $_.FullName }
