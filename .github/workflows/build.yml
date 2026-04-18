@@ -7,13 +7,13 @@
 name: Build and Deploy
 
 on:
-  # Uncomment below to enable automatic workflow runs on push
-  # push:
-  #   branches:
-  #     - main
-  #     - develop
-  #     - 'feature/**'
-  #     - 'release/**'
+  # Enable automatic workflow runs on push
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+      - 'release/**'
   # Uncomment below to enable automatic workflow runs on pull requests
   # pull_request:
   #   branches:
@@ -82,8 +82,8 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
   
-  # Deployment jobs commented out - waiting for Azure quota approval
-  # Uncomment these jobs once Azure B1 VM quota is approved
+  # Deployment jobs enabled now that Azure quota is available
+  # These jobs run only when the appropriate branch and event conditions are met.
   
   # Job 2: Deploy to development (automatic on develop branch)
   deploy-dev:
@@ -101,7 +101,7 @@ jobs:
       resource-type: 'webapp'
     secrets: inherit
   
-  # # Job 3: Deploy to staging (automatic on main branch)
+  # Job 3: Deploy to staging (disabled)
   # deploy-staging:
   #   name: Deploy to Staging
   #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -117,7 +117,7 @@ jobs:
   #     resource-type: 'webapp'
   #   secrets: inherit
   
-  # # Job 4: Deploy to production (manual trigger only)
+  # Job 4: Deploy to production (disabled)
   # deploy-production:
   #   name: Deploy to Production
   #   if: inputs.environment == 'production'
