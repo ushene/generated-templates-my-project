@@ -170,8 +170,10 @@ jobs:
           Write-Host "Running Snyk security vulnerability scan..." -ForegroundColor Cyan
           npm install -g snyk
           snyk auth $env:SNYK_TOKEN
-          snyk test --file=MyTestApp.Api.csproj --severity-threshold=high || true
-          snyk monitor --file=MyTestApp.Api.csproj
+          # For .NET, Snyk scans obj/project.assets.json (created by dotnet restore)
+          # Let Snyk auto-detect the project structure
+          snyk test --severity-threshold=high || true
+          snyk monitor
       
       # Step 8: Package application
       - name: Package application
