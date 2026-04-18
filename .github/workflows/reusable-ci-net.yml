@@ -163,12 +163,15 @@ jobs:
       - name: Run Snyk security scan
         if: ${{ !inputs.skip-security-scan }}
         shell: pwsh
+        working-directory: test-dotnet-app/src/MyTestApp.Api
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
           Write-Host "Running Snyk security vulnerability scan..." -ForegroundColor Cyan
           npm install -g snyk
-          snyk auth ${{ secrets.SNYK_TOKEN }}
-          snyk test --severity-threshold=high || true
-          snyk monitor
+          snyk auth $env:SNYK_TOKEN
+          snyk test --file=MyTestApp.Api.csproj --severity-threshold=high || true
+          snyk monitor --file=MyTestApp.Api.csproj
       
       # Step 8: Package application
       - name: Package application
