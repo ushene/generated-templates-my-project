@@ -206,7 +206,7 @@ jobs:
           # Upload artifacts
           $targetPath = "${{ inputs.jfrog-repository }}/$env:APP_NAME/$env:APP_VERSION/"
           Write-Host "Uploading to $targetPath" -ForegroundColor Cyan
-          jf rt upload "artifacts/*" "$targetPath" --flat=false --recursive=true
+          jf rt upload "artifacts/*" "$targetPath" --flat=true --recursive=true
           
           Write-Host "Artifacts published successfully" -ForegroundColor Green
       
