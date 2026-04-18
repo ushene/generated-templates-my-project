@@ -96,6 +96,7 @@ jobs:
       version: ${{ needs.build.outputs.artifact_version }}
       environment: 'development'
       skip-health-check: false
+      jfrog-repository: ${{ needs.config.outputs.jfrog-repository }}
       resource-group: ${{ vars.DEV_RESOURCE_GROUP }}
       resource-name: ${{ vars.DEV_RESOURCE_NAME }}
       resource-type: 'webapp'

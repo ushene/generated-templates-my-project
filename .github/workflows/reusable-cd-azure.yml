@@ -38,6 +38,10 @@ on:
         description: 'Azure resource name'
         required: true
         type: string
+      jfrog-repository:
+        description: 'JFrog repository name'
+        required: true
+        type: string
       resource-type:
         description: 'Azure resource type (webapp/functionapp)'
         required: false
@@ -115,10 +119,12 @@ jobs:
           
           jf config add artifactory --url="${{ secrets.JFROG_URL }}" --user="${{ secrets.JFROG_USERNAME }}" --password="${{ secrets.JFROG_PASSWORD }}" --interactive=false
           
-          $artifactPath = "*/${{ inputs.app-name }}/${{ inputs.version }}/"
+          $artifactPath = "${{ inputs.jfrog-repository }}/${{ inputs.app-name }}/${{ inputs.version }}/"
           New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
-          jf rt download "$artifactPath" "artifacts/" --flat=false
+          jf rt download "$artifactPath*" "artifacts/" --flat=true --recursive=true
           
+          Write-Host "Downloaded artifact files:" -ForegroundColor Cyan
+          Get-ChildItem -Path "artifacts" -Recurse | ForEach-Object { Write-Host $_.FullName }
           Write-Host "Artifacts downloaded" -ForegroundColor Green
       
       # Step 3: Pre-deployment steps
@@ -144,7 +150,7 @@ jobs:
           if (-not $resourceGroup) { throw "Azure resource group is required" }
           if (-not $resourceName) { throw "Azure resource name is required" }
           
-          $zipFile = Get-ChildItem -Path "artifacts" -Filter "*.zip" | Select-Object -First 1 -ExpandProperty FullName
+          $zipFile = Get-ChildItem -Path "artifacts" -Recurse -Filter "*.zip" -File | Select-Object -First 1 -ExpandProperty FullName
           if (-not $zipFile) { throw "No deployment package found in artifacts folder" }
           
           if ($resourceType -eq "webapp") {
