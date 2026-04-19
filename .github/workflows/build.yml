@@ -1,60 +1,89 @@
-﻿# Main Build Workflow
-# Project: my-dotnet-app
-# Language: .NET
-# Deployment: Azure
-# Purpose: Orchestrates CI/CD using reusable workflows
+﻿# =============================================================================
+# MAIN BUILD & DEPLOY WORKFLOW (Orchestrator)
+# =============================================================================
+# This is the "entry point" workflow that GitHub Actions runs.
+# It does NOT build or deploy directly — instead, it calls two reusable
+# workflows (reusable-ci-net.yml for building, reusable-cd-azure.yml for deploying).
+#
+# HOW TO REUSE FOR A DIFFERENT APP:
+#   1. Update the env: block below with your app's values
+#   2. Set the required secrets in your GitHub repo settings
+#   3. Set the required variables (vars.*) for each environment
+#   That's it — no other file changes needed.
+# =============================================================================
 
 name: Build and Deploy
 
+# --- TRIGGERS ---
+# This section defines WHEN the workflow runs.
 on:
-  # Enable automatic workflow runs on push
+  # Runs automatically when code is pushed to any of these branches
   push:
     branches:
-      - main
-      - develop
-      - parameterized-backup
-      - 'feature/**'
-      - 'release/**'
-  # Uncomment below to enable automatic workflow runs on pull requests
+      - main                   # Production-ready code
+      - develop                # Integration branch
+      - parameterized-backup   # This parameterized version branch
+      - 'feature/**'           # Any feature branch (e.g. feature/login)
+      - 'release/**'           # Any release branch (e.g. release/v1.2)
+
+  # Uncomment below to also trigger on pull requests
   # pull_request:
   #   branches:
   #     - main
   #     - develop
+
+  # Allows you to manually run this workflow from the GitHub Actions UI
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Deploy to environment'
+        description: 'Deploy to environment'  # Dropdown shown in the UI
         required: false
         type: choice
         options:
-          - none
-          - development
-          - staging
-          - production
+          - none          # Just build, don't deploy
+          - development   # Deploy to dev environment
+          - staging       # Deploy to staging environment
+          - production    # Deploy to production environment
         default: 'none'
       skip_tests:
-        description: 'Skip running tests'
+        description: 'Skip running tests'  # Checkbox shown in the UI
         required: false
         type: boolean
         default: false
 
-# Centralized configuration — Update these values for your application
+# =============================================================================
+# CENTRALIZED CONFIGURATION
+# =============================================================================
+# All app-specific values live here. To adapt this workflow for a different
+# application, ONLY change the values below. Everything else is generic.
 env:
-  APP_NAME: 'MyTestApp'
-  JFROG_REPOSITORY: 'my-app-local'
-  BUILD_CONFIGURATION: 'Release'
-  DOTNET_VERSION: '8.x'
-  SOLUTION_PATH: 'test-dotnet-app'
-  PROJECT_PATH: 'test-dotnet-app/src/MyTestApp.Api/MyTestApp.Api.csproj'
-  HEALTH_CHECK_PATH: '/api/health'
-  READINESS_CHECK_PATH: '/api/ready'
-  DOTNET_RUNTIME_VERSION: 'DOTNETCORE|8.0'
+  APP_NAME: 'MyTestApp'                                                   # Your application's name (used for artifact naming)
+  JFROG_REPOSITORY: 'my-app-local'                                        # JFrog Artifactory repository to store/retrieve build packages
+  BUILD_CONFIGURATION: 'Release'                                          # .NET build mode: 'Release' for production, 'Debug' for debugging
+  DOTNET_VERSION: '8.x'                                                   # .NET SDK version to install (e.g. '8.x', '9.x')
+  SOLUTION_PATH: 'test-dotnet-app'                                        # Folder containing the .sln file (relative to repo root)
+  PROJECT_PATH: 'test-dotnet-app/src/MyTestApp.Api/MyTestApp.Api.csproj'  # Path to the main .csproj file to publish
+  HEALTH_CHECK_PATH: '/api/health'                                        # URL path the health check endpoint responds on
+  READINESS_CHECK_PATH: '/api/ready'                                      # URL path the readiness endpoint responds on
+  DOTNET_RUNTIME_VERSION: 'DOTNETCORE|8.0'                                # Azure App Service runtime string (must match your .NET version)
 
+# =============================================================================
+# JOBS
+# =============================================================================
 jobs:
-  # Job 0: Setup configuration (workaround for env limitation in reusable workflows)
+
+  # ---------------------------------------------------------------------------
+  # JOB 0: CONFIG
+  # ---------------------------------------------------------------------------
+  # WHY THIS EXISTS: GitHub Actions does not allow passing env: variables
+  # directly to reusable workflows (workflow_call). This job works around that
+  # limitation by reading each env variable and writing it to job outputs,
+  # which CAN be passed to reusable workflows.
   config:
     name: Setup Configuration
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest     # Runs on a GitHub-hosted Ubuntu machine
+
+    # These outputs become available to other jobs via: needs.config.outputs.<name>
     outputs:
       app-name: ${{ steps.set-config.outputs.app-name }}
       jfrog-repository: ${{ steps.set-config.outputs.jfrog-repository }}
@@ -65,7 +94,9 @@ jobs:
       health-check-path: ${{ steps.set-config.outputs.health-check-path }}
       readiness-check-path: ${{ steps.set-config.outputs.readiness-check-path }}
       dotnet-runtime-version: ${{ steps.set-config.outputs.dotnet-runtime-version }}
+
     steps:
+      # Write each env variable to GITHUB_OUTPUT so downstream jobs can read them
       - name: Set configuration outputs
         id: set-config
         run: |
@@ -79,51 +110,63 @@ jobs:
           echo "readiness-check-path=${{ env.READINESS_CHECK_PATH }}" >> $GITHUB_OUTPUT
           echo "dotnet-runtime-version=${{ env.DOTNET_RUNTIME_VERSION }}" >> $GITHUB_OUTPUT
 
-  # Job 1: Build using reusable CI workflow
+  # ---------------------------------------------------------------------------
+  # JOB 1: BUILD
+  # ---------------------------------------------------------------------------
+  # Calls the reusable CI workflow to: restore → build → test → scan → package → publish
+  # "needs: config" means this job waits for the config job to finish first.
   build:
     name: Build Application
-    needs: config
-    uses: ./.github/workflows/reusable-ci-net.yml
+    needs: config              # Wait for config job to finish so we can use its outputs
+    uses: ./.github/workflows/reusable-ci-net.yml   # Call the reusable CI workflow
     with:
+      # Pass all configuration values from the config job
       app-name: ${{ needs.config.outputs.app-name }}
       build-configuration: ${{ needs.config.outputs.build-configuration }}
       NET-version: ${{ needs.config.outputs.dotnet-version }}
-      skip-tests: ${{ inputs.skip_tests || false }}
-      skip-security-scan: false
+      skip-tests: ${{ inputs.skip_tests || false }}   # Use the manual input, default false
+      skip-security-scan: false                        # Always run security scans
       jfrog-repository: ${{ needs.config.outputs.jfrog-repository }}
       solution-path: ${{ needs.config.outputs.solution-path }}
       project-path: ${{ needs.config.outputs.project-path }}
     secrets:
+      # Pass secrets from this repo's settings to the reusable workflow
       JFROG_URL: ${{ secrets.JFROG_URL }}
       JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
       JFROG_PASSWORD: ${{ secrets.JFROG_PASSWORD }}
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-  
-  # Deployment jobs enabled now that Azure quota is available
-  # These jobs run only when the appropriate branch and event conditions are met.
-  
-  # Job 2: Deploy to development (automatic on develop branch)
+
+  # ---------------------------------------------------------------------------
+  # JOB 2: DEPLOY TO DEVELOPMENT
+  # ---------------------------------------------------------------------------
+  # Calls the reusable CD workflow to deploy to the dev environment.
+  # Only runs when:
+  #   - Code is pushed to the 'develop' branch, OR
+  #   - Someone manually triggers the workflow and selects 'development'
   deploy-dev:
     name: Deploy to Development
     if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/develop') || (github.event_name == 'workflow_dispatch' && inputs.environment == 'development') }}
-    needs: [config, build]
-    uses: ./.github/workflows/reusable-cd-azure.yml
+    needs: [config, build]     # Wait for both config and build to succeed
+    uses: ./.github/workflows/reusable-cd-azure.yml   # Call the reusable CD workflow
     with:
       app-name: ${{ needs.config.outputs.app-name }}
-      version: ${{ needs.build.outputs.artifact_version }}
+      version: ${{ needs.build.outputs.artifact_version }}   # Version produced by the build job
       environment: 'development'
       skip-health-check: false
       jfrog-repository: ${{ needs.config.outputs.jfrog-repository }}
-      resource-group: ${{ vars.DEV_RESOURCE_GROUP }}
-      resource-name: ${{ vars.DEV_RESOURCE_NAME }}
-      resource-type: 'webapp'
+      resource-group: ${{ vars.DEV_RESOURCE_GROUP }}          # Set in GitHub repo Variables settings
+      resource-name: ${{ vars.DEV_RESOURCE_NAME }}            # Set in GitHub repo Variables settings
+      resource-type: 'webapp'                                  # Azure App Service (web app)
       health-check-path: ${{ needs.config.outputs.health-check-path }}
       readiness-check-path: ${{ needs.config.outputs.readiness-check-path }}
       dotnet-runtime-version: ${{ needs.config.outputs.dotnet-runtime-version }}
-    secrets: inherit
-  
-  # Job 3: Deploy to staging (disabled)
+    secrets: inherit   # Automatically pass ALL secrets from this repo to the reusable workflow
+
+  # ---------------------------------------------------------------------------
+  # JOB 3: DEPLOY TO STAGING (currently disabled — uncomment to enable)
+  # ---------------------------------------------------------------------------
+  # Runs when code is pushed to 'main' or manually triggered with 'staging'
   # deploy-staging:
   #   name: Deploy to Staging
   #   if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging') }}
@@ -141,8 +184,11 @@ jobs:
   #     readiness-check-path: ${{ needs.config.outputs.readiness-check-path }}
   #     dotnet-runtime-version: ${{ needs.config.outputs.dotnet-runtime-version }}
   #   secrets: inherit
-  
-  # Job 4: Deploy to production (disabled)
+
+  # ---------------------------------------------------------------------------
+  # JOB 4: DEPLOY TO PRODUCTION (currently disabled — uncomment to enable)
+  # ---------------------------------------------------------------------------
+  # Only runs when manually triggered with 'production' (never automatic)
   # deploy-production:
   #   name: Deploy to Production
   #   if: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'production' }}
