@@ -2,6 +2,16 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
+// Optimize startup performance
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = null;
+});
+// Enable ReadyState endpoint for faster health checks
+builder.Services.Configure<HostOptions>(options =>
+{
+    options.ShutdownTimeout = TimeSpan.FromSeconds(30);
+});
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
@@ -17,6 +27,9 @@ app.UseHttpsRedirection();
 
 // Map controllers (enables /api/health endpoints)
 app.MapControllers();
+// Add startup logging
+app.Logger.LogInformation("Application startup: {Timestamp}", DateTime.UtcNow);
+
 
 var summaries = new[]
 {

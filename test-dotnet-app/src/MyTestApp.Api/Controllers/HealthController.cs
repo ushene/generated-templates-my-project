@@ -27,4 +27,22 @@ public class HealthController : ControllerBase
             buildNumber = Environment.GetEnvironmentVariable("BUILD_NUMBER") ?? "local"
         });
     }
+
+    /// <summary>
+    /// Readiness probe for deployment - lightweight check
+    /// </summary>
+    [HttpGet("/api/ready")]
+    public IActionResult ReadinessCheck()
+    {
+        return Ok(new { ready = true, timestamp = DateTime.UtcNow });
+    }
+
+    /// <summary>
+    /// Liveness probe - checks if app is running
+    /// </summary>
+    [HttpGet("/api/alive")]
+    public IActionResult LivenessCheck()
+    {
+        return Ok(new { alive = true, version = "1.0", timestamp = DateTime.UtcNow });
+    }
 }
