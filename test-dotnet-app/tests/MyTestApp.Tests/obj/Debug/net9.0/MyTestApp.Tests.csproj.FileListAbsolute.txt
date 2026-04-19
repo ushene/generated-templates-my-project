@@ -108,3 +108,4 @@ C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-a
 C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\tests\MyTestApp.Tests\obj\Debug\net9.0\MyTestApp.Tests.pdb
 C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\tests\MyTestApp.Tests\obj\Debug\net9.0\MyTestApp.Tests.genruntimeconfig.cache
 C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\tests\MyTestApp.Tests\obj\Debug\net9.0\ref\MyTestApp.Tests.dll
+C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\tests\MyTestApp.Tests\obj\Debug\net9.0\MyTestApp.Tests.sourcelink.json

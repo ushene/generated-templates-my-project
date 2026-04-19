@@ -30,3 +30,4 @@ C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-a
 C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\src\MyTestApp.Api\obj\Debug\net9.0\MyTestApp.Api.pdb
 C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\src\MyTestApp.Api\obj\Debug\net9.0\MyTestApp.Api.genruntimeconfig.cache
 C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\src\MyTestApp.Api\obj\Debug\net9.0\ref\MyTestApp.Api.dll
+C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\src\MyTestApp.Api\obj\Debug\net9.0\MyTestApp.Api.sourcelink.json
