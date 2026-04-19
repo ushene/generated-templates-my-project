@@ -211,16 +211,24 @@ jobs:
           Write-Host "Waiting 60 seconds for deployment to settle..." -ForegroundColor Yellow
           Start-Sleep -Seconds 60
           
+          $iwrParams = @{
+            Method = 'Get'
+            TimeoutSec = 45
+            UseBasicParsing = $true
+            SkipCertificateCheck = $true
+            ErrorAction = 'Stop'
+          }
+          
           for ($retryCount = 1; $retryCount -le $maxRetries; $retryCount++) {
             $elapsedSeconds = 60 + (($retryCount - 1) * $retryDelaySeconds)
             Write-Host "Health check attempt $retryCount/$maxRetries (elapsed: ${elapsedSeconds}s)..." -ForegroundColor Yellow
             
             try {
-              $readyResponse = Invoke-WebRequest -Uri "$appUrl/api/ready" -Method Get -TimeoutSec 10 -ErrorAction Stop
+              $readyResponse = Invoke-WebRequest -Uri "$appUrl/api/ready" @iwrParams
               if ($readyResponse.StatusCode -eq 200) {
                 Write-Host "Readiness check passed" -ForegroundColor Green
                 
-                $healthResponse = Invoke-WebRequest -Uri "$appUrl/api/health" -Method Get -TimeoutSec 10 -ErrorAction Stop
+                $healthResponse = Invoke-WebRequest -Uri "$appUrl/api/health" @iwrParams
                 if ($healthResponse.StatusCode -eq 200) {
                   Write-Host "Health check passed" -ForegroundColor Green
                   exit 0
