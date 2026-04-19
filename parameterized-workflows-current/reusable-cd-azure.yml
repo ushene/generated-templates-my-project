@@ -1,0 +1,238 @@
+﻿# Reusable CD Workflow
+# Deployment Type: Azure
+# Purpose: Deploy application to Azure
+# This workflow can be called from other workflows using workflow_call
+
+name: Reusable CD - Azure
+
+on:
+  workflow_call:
+    inputs:
+      app-name:
+        description: 'Application name'
+        required: true
+        type: string
+      version:
+        description: 'Version to deploy'
+        required: true
+        type: string
+      environment:
+        description: 'Target environment'
+        required: true
+        type: string
+      skip-health-check:
+        description: 'Skip post-deployment health check'
+        required: false
+        type: boolean
+        default: false
+      runner:
+        description: 'GitHub runner to use'
+        required: false
+        type: string
+        default: 'ubuntu-latest'
+      resource-group:
+        description: 'Azure resource group'
+        required: true
+        type: string
+      resource-name:
+        description: 'Azure resource name'
+        required: true
+        type: string
+      jfrog-repository:
+        description: 'JFrog repository name'
+        required: true
+        type: string
+      resource-type:
+        description: 'Azure resource type (webapp/functionapp)'
+        required: false
+        type: string
+        default: 'webapp'
+      checkout-paths:
+        description: 'Paths to include in sparse checkout'
+        required: false
+        type: string
+        default: |
+          deployment/
+          scripts/
+    
+    outputs:
+      deployment-url:
+        description: 'URL of the deployed application'
+        value: ${{ jobs.deploy.outputs.url }}
+      deployment-status:
+        description: 'Deployment status (success/failure)'
+        value: ${{ jobs.deploy.outputs.status }}
+    
+    secrets:
+      JFROG_URL:
+        description: 'JFrog Artifactory URL'
+        required: true
+      JFROG_USERNAME:
+        description: 'JFrog username'
+        required: true
+      JFROG_PASSWORD:
+        description: 'JFrog password or API token'
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        description: 'Azure subscription ID'
+        required: true
+      AZURE_TENANT_ID:
+        description: 'Azure tenant ID'
+        required: true
+      AZURE_CLIENT_ID:
+        description: 'Azure client ID'
+        required: true
+      AZURE_CLIENT_SECRET:
+        description: 'Azure client secret'
+        required: true
+
+env:
+  APP_NAME: ${{ inputs.app-name }}
+  APP_VERSION: ${{ inputs.version }}
+  TARGET_ENV: ${{ inputs.environment }}
+
+jobs:
+  deploy:
+    name: Deploy to ${{ inputs.environment }}
+    runs-on: ${{ inputs.runner }}
+    
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ steps.deploy.outputs.app_url }}
+    
+    outputs:
+      url: ${{ steps.deploy.outputs.app_url }}
+      status: ${{ steps.set-status.outputs.status }}
+    
+    steps:
+      # Step 1: Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: ${{ inputs.checkout-paths }}
+      
+      # Step 2: Download artifacts from JFrog
+      - name: Download artifacts from JFrog
+        shell: pwsh
+        run: |
+          Write-Host "Downloading artifacts from JFrog..." -ForegroundColor Cyan
+          
+          if (-not (Get-Command jf -ErrorAction SilentlyContinue)) {
+            Write-Host "Installing JFrog CLI..." -ForegroundColor Yellow
+            curl -fL https://install-cli.jfrog.io | sh
+          }
+          
+          jf config add artifactory --url="${{ secrets.JFROG_URL }}" --user="${{ secrets.JFROG_USERNAME }}" --password="${{ secrets.JFROG_PASSWORD }}" --interactive=false
+          
+          $artifactPath = "${{ inputs.jfrog-repository }}/${{ inputs.app-name }}/${{ inputs.version }}/"
+          $artifactPattern = "$artifactPath*.zip"
+          Write-Host "Downloading artifact pattern: $artifactPattern" -ForegroundColor Cyan
+          New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
+          jf rt download "$artifactPattern" "artifacts/" --flat=true --recursive=true
+          
+          Write-Host "Downloaded artifact files:" -ForegroundColor Cyan
+          Get-ChildItem -Path "artifacts" -Recurse | ForEach-Object { Write-Host $_.FullName }
+          Write-Host "Artifacts downloaded" -ForegroundColor Green
+      
+      # Step 3: Pre-deployment steps
+      - name: Azure Login
+        shell: pwsh
+        run: |
+          Write-Host "Logging in to Azure..." -ForegroundColor Cyan
+          az login --service-principal -u ${{ secrets.AZURE_CLIENT_ID }} -p ${{ secrets.AZURE_CLIENT_SECRET }} --tenant ${{ secrets.AZURE_TENANT_ID }}
+          az account set --subscription ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          Write-Host "Azure login successful" -ForegroundColor Green
+      
+      # Step 4: Deploy application
+      - name: Deploy to Azure
+        id: deploy
+        shell: pwsh
+        run: |
+          Write-Host "Deploying to Azure..." -ForegroundColor Cyan
+          
+          # Deploy based on resource type
+          $resourceType = "${{ inputs.resource-type }}"
+          $resourceGroup = "${{ inputs.resource-group }}"
+          $resourceName = "${{ inputs.resource-name }}"
+          if (-not $resourceGroup) { throw "Azure resource group is required" }
+          if (-not $resourceName) { throw "Azure resource name is required" }
+          
+          $zipFile = Get-ChildItem -Path "artifacts" -Recurse -Filter "*.zip" -File | Select-Object -First 1 -ExpandProperty FullName
+          if (-not $zipFile) { throw "No deployment package found in artifacts folder" }
+          
+          if ($resourceType -eq "webapp") {
+            az webapp deployment source config-zip `
+              --resource-group $resourceGroup `
+              --name $resourceName `
+              --src "$zipFile"
+              
+            $appUrl = az webapp show `
+              --resource-group $resourceGroup `
+              --name $resourceName `
+              --query "defaultHostName" -o tsv
+              
+            Write-Host "app_url=https://$appUrl" >> $env:GITHUB_OUTPUT
+          }
+          elseif ($resourceType -eq "functionapp") {
+            az functionapp deployment source config-zip `
+              --resource-group $resourceGroup `
+              --name $resourceName `
+              --src "$zipFile"
+              
+            $appUrl = az functionapp show `
+              --resource-group $resourceGroup `
+              --name $resourceName `
+              --query "defaultHostName" -o tsv
+              
+            Write-Host "app_url=https://$appUrl" >> $env:GITHUB_OUTPUT
+          }
+          
+          Write-Host "Deployment complete" -ForegroundColor Green
+      
+      # Step 5: Health check
+      - name: Health check
+        if: ${{ !inputs.skip-health-check }}
+        shell: pwsh
+        run: |
+          Write-Host "Running health checks..." -ForegroundColor Cyan
+          
+          $appUrl = "${{ steps.deploy.outputs.app_url }}"
+          $maxRetries = 10
+          $retryCount = 0
+          
+          while ($retryCount -lt $maxRetries) {
+            try {
+              $retryCount++
+              Write-Host "Healthcheck attempt $retryCount of $maxRetries..." -ForegroundColor Yellow
+              
+              $response = Invoke-WebRequest -Uri "$appUrl/health" -Method Get -TimeoutSec 30
+              
+              if ($response.StatusCode -eq 200) {
+                Write-Host "Health check passed!" -ForegroundColor Green
+                break
+              }
+            }
+            catch {
+              if ($retryCount -lt $maxRetries) {
+                Start-Sleep -Seconds 30
+              } else {
+                Write-Host "Health check failed" -ForegroundColor Red
+                exit 1
+              }
+            }
+          }
+      
+      # Step 6: Set deployment status
+      - name: Set deployment status
+        id: set-status
+        if: always()
+        shell: pwsh
+        run: |
+          $status = "${{ job.status }}"
+          Write-Host "status=$status" >> $env:GITHUB_OUTPUT
+          Write-Host "`n=== Deployment Summary ===" -ForegroundColor Green
+          Write-Host "Application: ${{ inputs.app-name }}" -ForegroundColor Cyan
+          Write-Host "Version: ${{ inputs.version }}" -ForegroundColor Cyan
+          Write-Host "Environment: ${{ inputs.environment }}" -ForegroundColor Cyan
+          Write-Host "Status: $status" -ForegroundColor Cyan
+          Write-Host "===========================`n" -ForegroundColor Green
