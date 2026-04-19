@@ -179,7 +179,7 @@ jobs:
               --name $resourceName `
               --query "defaultHostName" -o tsv
               
-            Write-Host "app_url=https://$appUrl" >> $env:GITHUB_OUTPUT
+            "app_url=https://$appUrl" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           }
           elseif ($resourceType -eq "functionapp") {
             az functionapp deployment source config-zip `
@@ -192,7 +192,7 @@ jobs:
               --name $resourceName `
               --query "defaultHostName" -o tsv
               
-            Write-Host "app_url=https://$appUrl" >> $env:GITHUB_OUTPUT
+            "app_url=https://$appUrl" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           }
           
           Write-Host "Deployment uploaded" -ForegroundColor Green
