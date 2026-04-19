@@ -100,8 +100,8 @@ jobs:
         run: |
           $version = "${{ github.run_number }}"
           $artifact = "${{ inputs.app-name }}-$version"
-          Write-Host "version=$version" >> $env:GITHUB_OUTPUT
-          Write-Host "artifact=$artifact" >> $env:GITHUB_OUTPUT
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "artifact=$artifact" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "Building version: $version" -ForegroundColor Cyan
       
       # Step 3: Setup build environment
@@ -225,7 +225,7 @@ jobs:
         shell: pwsh
         run: |
           $status = "${{ job.status }}"
-          Write-Host "status=$status" >> $env:GITHUB_OUTPUT
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "`n=== Build Summary ===" -ForegroundColor Green
           Write-Host "Application: $env:APP_NAME" -ForegroundColor Cyan
           Write-Host "Version: $env:APP_VERSION" -ForegroundColor Cyan

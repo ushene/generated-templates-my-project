@@ -255,7 +255,7 @@ jobs:
         shell: pwsh
         run: |
           $status = "${{ job.status }}"
-          Write-Host "status=$status" >> $env:GITHUB_OUTPUT
+          "status=$status" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "`n=== Deployment Summary ===" -ForegroundColor Green
           Write-Host "Application: ${{ inputs.app-name }}" -ForegroundColor Cyan
           Write-Host "Version: ${{ inputs.version }}" -ForegroundColor Cyan
