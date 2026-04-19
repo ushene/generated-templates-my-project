@@ -1,146 +1,219 @@
-﻿# Reusable CI Workflow
-# Language: .NET
-# Purpose: Build, test, scan, and publish artifacts to JFrog
-# This workflow can be called from other workflows using workflow_call
+﻿# =============================================================================
+# REUSABLE CI (Continuous Integration) WORKFLOW — .NET
+# =============================================================================
+# This workflow is NOT run directly. It is CALLED by build.yml (the orchestrator)
+# using "uses: ./.github/workflows/reusable-ci-net.yml".
+#
+# WHAT IT DOES (in order):
+#   1. Checks out the source code
+#   2. Sets up the .NET SDK
+#   3. Restores NuGet packages
+#   4. Builds the application
+#   5. Runs unit tests
+#   6. Runs Snyk security scan
+#   7. Packages the app into a .zip file
+#   8. Publishes the .zip to JFrog Artifactory
+#   9. Uploads the .zip to GitHub as a build artifact
+#
+# ALL PATHS AND NAMES ARE PARAMETERIZED — the caller passes them in via inputs.
+# =============================================================================
 
 name: Reusable CI - .NET
 
+# --- TRIGGER ---
+# workflow_call means this workflow can only be called by another workflow.
 on:
   workflow_call:
+
+    # --- INPUTS ---
+    # These are the parameters the calling workflow (build.yml) must provide.
     inputs:
       app-name:
-        description: 'Application name'
+        description: 'Application name (used for naming artifacts)'
         required: true
         type: string
       build-configuration:
-        description: 'Build configuration (Release/Debug)'
+        description: 'Build configuration: Release (optimized) or Debug (with symbols)'
         required: false
         type: string
         default: 'Release'
       NET-version:
-        description: '.NET SDK/Runtime version'
+        description: '.NET SDK version to install (e.g. 8.x, 9.x)'
         required: false
         type: string
         default: '8.x'
       skip-tests:
-        description: 'Skip running tests'
+        description: 'Set to true to skip running unit tests'
         required: false
         type: boolean
         default: false
       skip-security-scan:
-        description: 'Skip security scanning'
+        description: 'Set to true to skip Snyk security scanning'
         required: false
         type: boolean
         default: false
       runner:
-        description: 'GitHub runner to use'
+        description: 'GitHub-hosted runner label (e.g. ubuntu-latest, windows-latest)'
         required: false
         type: string
         default: 'ubuntu-latest'
       jfrog-repository:
-        description: 'JFrog repository name'
+        description: 'JFrog Artifactory repository name to publish artifacts to'
         required: false
         type: string
         default: ''
-    
+      solution-path:
+        description: 'Path to the folder containing the .sln file (relative to repo root)'
+        required: false
+        type: string
+        default: '.'
+      project-path:
+        description: 'Path to the main .csproj file to publish (relative to repo root)'
+        required: true
+        type: string
+      health-check-path:
+        description: 'Health check endpoint path — not used in CI but kept for consistency'
+        required: false
+        type: string
+        default: '/api/health'
+
+    # --- OUTPUTS ---
+    # These values are passed back to the calling workflow so it can use them
+    # (e.g. the build version is used by the CD workflow to know what to deploy).
     outputs:
       artifact_version:
-        description: 'Version of the built artifact'
+        description: 'The version number of the built artifact (equals the GitHub run number)'
         value: ${{ jobs.build.outputs.version }}
       artifact_name:
-        description: 'Name of the artifact'
+        description: 'The full artifact name (e.g. MyTestApp-42)'
         value: ${{ jobs.build.outputs.artifact }}
       build_status:
-        description: 'Build status (success/failure)'
+        description: 'Whether the build succeeded or failed'
         value: ${{ jobs.build.outputs.status }}
-    
+
+    # --- SECRETS ---
+    # Sensitive values that must be stored in GitHub repo Settings → Secrets.
     secrets:
       JFROG_URL:
-        description: 'JFrog Artifactory URL'
+        description: 'JFrog Artifactory base URL (e.g. https://mycompany.jfrog.io/artifactory)'
         required: true
       JFROG_USERNAME:
-        description: 'JFrog username'
+        description: 'JFrog username for authentication'
         required: true
       JFROG_PASSWORD:
-        description: 'JFrog password or API token'
+        description: 'JFrog password or API token for authentication'
         required: true
       SONAR_TOKEN:
-        description: 'SonarQube token'
+        description: 'SonarQube token for code quality analysis (optional)'
         required: false
       SNYK_TOKEN:
-        description: 'Snyk token'
+        description: 'Snyk token for security vulnerability scanning (optional)'
         required: false
 
+# --- ENVIRONMENT VARIABLES ---
+# These are set for ALL steps in this workflow using the input values.
 env:
-  BUILD_CONFIGURATION: ${{ inputs.build-configuration }}
-  APP_NAME: ${{ inputs.app-name }}
-  APP_VERSION: ${{ github.run_number }}
+  BUILD_CONFIGURATION: ${{ inputs.build-configuration }}   # Release or Debug
+  APP_NAME: ${{ inputs.app-name }}                         # Application name for artifact naming
+  APP_VERSION: ${{ github.run_number }}                    # Auto-incrementing build number from GitHub
 
+# =============================================================================
+# BUILD JOB
+# =============================================================================
 jobs:
   build:
     name: Build and Test
-    runs-on: ${{ inputs.runner }}
-    
+    runs-on: ${{ inputs.runner }}   # Which machine to run on (default: ubuntu-latest)
+
+    # Values that this job produces — other jobs can read these
     outputs:
       version: ${{ steps.set-version.outputs.version }}
       artifact: ${{ steps.set-version.outputs.artifact }}
       status: ${{ steps.set-status.outputs.status }}
-    
+
     steps:
-      # Step 1: Checkout source code
+
+      # -----------------------------------------------------------------------
+      # STEP 1: CHECKOUT — Download the source code from the repository
+      # -----------------------------------------------------------------------
+      # fetch-depth: 0 means get the full git history (needed for version tagging)
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
-      # Step 2: Set version output
+
+      # -----------------------------------------------------------------------
+      # STEP 2: SET VERSION — Create a version string for this build
+      # -----------------------------------------------------------------------
+      # Uses the GitHub run number (auto-increments with each workflow run)
+      # Writes the version to GITHUB_OUTPUT so other steps/jobs can read it
       - name: Set version
         id: set-version
         shell: pwsh
         run: |
+          # Use the GitHub run number as the build version
           $version = "${{ github.run_number }}"
+          # Create the artifact name by combining app name + version (e.g. "MyTestApp-42")
           $artifact = "${{ inputs.app-name }}-$version"
+          # Write these values to the GitHub output file so other jobs can access them
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           "artifact=$artifact" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "Building version: $version" -ForegroundColor Cyan
-      
-      # Step 3: Setup build environment
+
+      # -----------------------------------------------------------------------
+      # STEP 3: SETUP .NET — Install the correct .NET SDK version
+      # -----------------------------------------------------------------------
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ inputs.NET-version }}
-      
+          dotnet-version: ${{ inputs.NET-version }}   # e.g. '8.x' installs latest .NET 8
+
+      # Print the installed version for debugging
       - name: Display .NET version
         shell: pwsh
         run: |
           Write-Host ".NET Version:" -ForegroundColor Cyan
           dotnet --version
-      
-      # Step 4: Restore dependencies
+
+      # -----------------------------------------------------------------------
+      # STEP 4: RESTORE — Download all NuGet package dependencies
+      # -----------------------------------------------------------------------
+      # working-directory is the solution folder passed in by the caller
       - name: Restore dependencies
         shell: pwsh
-        working-directory: test-dotnet-app
+        working-directory: ${{ inputs.solution-path }}
         run: |
           Write-Host "Restoring project dependencies..." -ForegroundColor Cyan
           dotnet restore
-      
-      # Step 5: Build application
+
+      # -----------------------------------------------------------------------
+      # STEP 5: BUILD — Compile the application
+      # -----------------------------------------------------------------------
+      # --no-restore: skip restoring again (we just did it above)
       - name: Build application
         shell: pwsh
-        working-directory: test-dotnet-app
+        working-directory: ${{ inputs.solution-path }}
         run: |
           Write-Host "Building application in $env:BUILD_CONFIGURATION mode..." -ForegroundColor Cyan
           dotnet build --configuration $env:BUILD_CONFIGURATION --no-restore
-      
-      # Step 6: Run unit tests
+
+      # -----------------------------------------------------------------------
+      # STEP 6: TEST — Run unit tests
+      # -----------------------------------------------------------------------
+      # Only runs if skip-tests is false (the "if" condition checks this)
+      # --no-build: don't rebuild, use the build from step 5
+      # --logger trx: output test results in Visual Studio .trx format
+      # --collect: collect code coverage data
       - name: Run unit tests
         if: ${{ !inputs.skip-tests }}
         shell: pwsh
-        working-directory: test-dotnet-app
+        working-directory: ${{ inputs.solution-path }}
         run: |
           Write-Host "Running unit tests..." -ForegroundColor Cyan
           dotnet test --no-build --configuration $env:BUILD_CONFIGURATION --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
-      
+
+      # Upload test results as a GitHub artifact so they can be viewed later
+      # "if: always()" means this runs even if tests fail (so you can see the results)
       - name: Publish test results
         if: always() && !inputs.skip-tests
         uses: actions/upload-artifact@v4
@@ -151,74 +224,105 @@ jobs:
             coverage.xml
             htmlcov/
             coverage/
-      
-      # Step 7: Security scanning
+
+      # -----------------------------------------------------------------------
+      # STEP 7: SECURITY SCAN — Run Snyk to check for known vulnerabilities
+      # -----------------------------------------------------------------------
+      # SonarQube is commented out — uncomment and configure if you use it
       # - name: Run SonarQube analysis
       #   if: ${{ !inputs.skip-security-scan }}
       #   shell: pwsh
       #   run: |
       #     Write-Host "Running SonarQube code quality analysis..." -ForegroundColor Cyan
       #     Write-Host "SonarQube analysis configured - implement based on your setup" -ForegroundColor Yellow
-      
+
+      # Snyk scans your NuGet dependencies for known security vulnerabilities
       - name: Run Snyk security scan
         if: ${{ !inputs.skip-security-scan }}
         shell: pwsh
-        working-directory: test-dotnet-app/src/MyTestApp.Api
         env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}   # Snyk API token from repo secrets
         run: |
           Write-Host "Running Snyk security vulnerability scan..." -ForegroundColor Cyan
+
+          # Figure out the project directory from the .csproj path
+          # e.g. "test-dotnet-app/src/MyTestApp.Api/MyTestApp.Api.csproj" → "test-dotnet-app/src/MyTestApp.Api"
+          $projectDir = Split-Path -Parent "${{ inputs.project-path }}"
+          Write-Host "Scanning project directory: $projectDir" -ForegroundColor Cyan
+
+          # Install the Snyk CLI tool globally via npm
           npm install -g snyk
+          # Authenticate with Snyk using the token
           snyk auth $env:SNYK_TOKEN
-          # For .NET, Snyk scans obj/project.assets.json (created by dotnet restore)
-          # Let Snyk auto-detect the project structure
-          snyk test --severity-threshold=high || true
-          snyk monitor
-      
-      # Step 8: Package application
+
+          # Scan for vulnerabilities — only fail on HIGH severity or above
+          # "|| true" means: don't fail the build even if vulnerabilities are found
+          snyk test --file="$projectDir/obj/project.assets.json" --severity-threshold=high || true
+          # Register the project with Snyk for ongoing monitoring
+          snyk monitor --file="$projectDir/obj/project.assets.json"
+
+      # -----------------------------------------------------------------------
+      # STEP 8: PACKAGE — Create a deployable .zip file
+      # -----------------------------------------------------------------------
+      # dotnet publish compiles and prepares the app for deployment
+      # Then we zip it up for uploading to JFrog/Azure
       - name: Package application
         shell: pwsh
         run: |
           Write-Host "Packaging application..." -ForegroundColor Cyan
+          # Build the package file name (e.g. "MyTestApp-42")
           $packageName = "$env:APP_NAME-$env:APP_VERSION"
-          $publishDir = "test-dotnet-app/publish"
-          dotnet publish test-dotnet-app/src/MyTestApp.Api/MyTestApp.Api.csproj --configuration $env:BUILD_CONFIGURATION --output $publishDir --no-build
+          # Publish the app to a temporary folder
+          $publishDir = "publish-output"
+          dotnet publish "${{ inputs.project-path }}" --configuration $env:BUILD_CONFIGURATION --output $publishDir --no-build
+          # Create the artifacts folder and zip the published output
           New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
           Compress-Archive -Path "$publishDir\*" -DestinationPath "artifacts\$packageName.zip"
           Write-Host "Package created: artifacts/$packageName.zip" -ForegroundColor Green
-      
-      # Step 9: Publish to JFrog Artifactory
+
+      # -----------------------------------------------------------------------
+      # STEP 9: PUBLISH TO JFROG — Upload the .zip to JFrog Artifactory
+      # -----------------------------------------------------------------------
+      # Only runs if a jfrog-repository was specified (not empty string)
       - name: Publish to JFrog
         if: inputs.jfrog-repository != ''
         shell: pwsh
         run: |
           Write-Host "Publishing artifacts to JFrog Artifactory..." -ForegroundColor Cyan
-          
-          # Setup JFrog CLI
+
+          # Install JFrog CLI if not already available
           if (-not (Get-Command jf -ErrorAction SilentlyContinue)) {
             Write-Host "Installing JFrog CLI..." -ForegroundColor Yellow
             curl -fL https://install-cli.jfrog.io | sh
           }
-          
-          # Configure JFrog CLI
+
+          # Configure JFrog CLI with credentials
           jf config add artifactory --url="${{ secrets.JFROG_URL }}" --user="${{ secrets.JFROG_USERNAME }}" --password="${{ secrets.JFROG_PASSWORD }}" --interactive=false
-          
-          # Upload artifacts
+
+          # Upload the zip to: <repo>/<app-name>/<version>/ in JFrog
           $targetPath = "${{ inputs.jfrog-repository }}/$env:APP_NAME/$env:APP_VERSION/"
           Write-Host "Uploading to $targetPath" -ForegroundColor Cyan
           jf rt upload "artifacts/*" "$targetPath" --flat=true --recursive=true
-          
+
           Write-Host "Artifacts published successfully" -ForegroundColor Green
-      
-      # Step 10: Upload build artifacts to GitHub
+
+      # -----------------------------------------------------------------------
+      # STEP 10: UPLOAD TO GITHUB — Save the .zip as a GitHub Actions artifact
+      # -----------------------------------------------------------------------
+      # This makes the build artifact downloadable from the GitHub Actions UI
+      # Retained for 30 days before automatic deletion
       - name: Upload artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-${{ inputs.app-name }}-${{ github.run_number }}
           path: artifacts/
           retention-days: 30
-      
-      # Step 11: Set build status
+
+      # -----------------------------------------------------------------------
+      # STEP 11: BUILD STATUS — Record whether the build passed or failed
+      # -----------------------------------------------------------------------
+      # "if: always()" means this step runs even if earlier steps failed
+      # It writes the final status to GITHUB_OUTPUT for the calling workflow
       - name: Set build status
         id: set-status
         if: always()
