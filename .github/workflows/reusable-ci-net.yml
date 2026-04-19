@@ -42,6 +42,31 @@ on:
         required: false
         type: string
         default: ''
+      source-directory:
+        description: 'Root source directory'
+        required: false
+        type: string
+        default: '.'
+      project-file:
+        description: 'Application project file path'
+        required: false
+        type: string
+        default: 'test-dotnet-app/src/MyTestApp.Api/MyTestApp.Api.csproj'
+      test-project-file:
+        description: 'Test project file or folder'
+        required: false
+        type: string
+        default: 'test-dotnet-app'
+      publish-directory:
+        description: 'Publish output directory'
+        required: false
+        type: string
+        default: 'test-dotnet-app/publish'
+      snyk-scan-directory:
+        description: 'Directory to use for Snyk scanning'
+        required: false
+        type: string
+        default: 'test-dotnet-app/src/MyTestApp.Api'
     
     outputs:
       artifact_version:
@@ -75,6 +100,11 @@ env:
   BUILD_CONFIGURATION: ${{ inputs.build-configuration }}
   APP_NAME: ${{ inputs.app-name }}
   APP_VERSION: ${{ github.run_number }}
+  SOURCE_DIRECTORY: ${{ inputs.source-directory }}
+  PROJECT_FILE: ${{ inputs.project-file }}
+  TEST_PROJECT_FILE: ${{ inputs.test-project-file }}
+  PUBLISH_DIRECTORY: ${{ inputs.publish-directory }}
+  SNYK_SCAN_DIRECTORY: ${{ inputs.snyk-scan-directory }}
 
 jobs:
   build:
@@ -119,27 +149,24 @@ jobs:
       # Step 4: Restore dependencies
       - name: Restore dependencies
         shell: pwsh
-        working-directory: test-dotnet-app
         run: |
           Write-Host "Restoring project dependencies..." -ForegroundColor Cyan
-          dotnet restore
+          dotnet restore "$env:PROJECT_FILE"
       
       # Step 5: Build application
       - name: Build application
         shell: pwsh
-        working-directory: test-dotnet-app
         run: |
           Write-Host "Building application in $env:BUILD_CONFIGURATION mode..." -ForegroundColor Cyan
-          dotnet build --configuration $env:BUILD_CONFIGURATION --no-restore
+          dotnet build "$env:PROJECT_FILE" --configuration $env:BUILD_CONFIGURATION --no-restore
       
       # Step 6: Run unit tests
       - name: Run unit tests
         if: ${{ !inputs.skip-tests }}
         shell: pwsh
-        working-directory: test-dotnet-app
         run: |
           Write-Host "Running unit tests..." -ForegroundColor Cyan
-          dotnet test --no-build --configuration $env:BUILD_CONFIGURATION --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
+          dotnet test "$env:TEST_PROJECT_FILE" --no-build --configuration $env:BUILD_CONFIGURATION --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
       
       - name: Publish test results
         if: always() && !inputs.skip-tests
@@ -163,7 +190,7 @@ jobs:
       - name: Run Snyk security scan
         if: ${{ !inputs.skip-security-scan }}
         shell: pwsh
-        working-directory: test-dotnet-app/src/MyTestApp.Api
+        working-directory: ${{ env.SNYK_SCAN_DIRECTORY }}
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
@@ -181,8 +208,8 @@ jobs:
         run: |
           Write-Host "Packaging application..." -ForegroundColor Cyan
           $packageName = "$env:APP_NAME-$env:APP_VERSION"
-          $publishDir = "test-dotnet-app/publish"
-          dotnet publish test-dotnet-app/src/MyTestApp.Api/MyTestApp.Api.csproj --configuration $env:BUILD_CONFIGURATION --output $publishDir --no-build
+          $publishDir = "$env:PUBLISH_DIRECTORY"
+          dotnet publish "$env:PROJECT_FILE" --configuration $env:BUILD_CONFIGURATION --output $publishDir --no-build
           New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
           Compress-Archive -Path "$publishDir\*" -DestinationPath "artifacts\$packageName.zip"
           Write-Host "Package created: artifacts/$packageName.zip" -ForegroundColor Green
