@@ -47,13 +47,6 @@ on:
         required: false
         type: string
         default: 'webapp'
-      checkout-paths:
-        description: 'Paths to include in sparse checkout'
-        required: false
-        type: string
-        default: |
-          deployment/
-          scripts/
     
     outputs:
       deployment-url:
@@ -109,7 +102,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          sparse-checkout: ${{ inputs.checkout-paths }}
+          sparse-checkout: |
+            deployment/
+            scripts/
       
       # Step 2: Download artifacts from JFrog
       - name: Download artifacts from JFrog
