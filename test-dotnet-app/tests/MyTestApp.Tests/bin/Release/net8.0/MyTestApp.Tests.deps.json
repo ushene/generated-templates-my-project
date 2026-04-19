@@ -19,17 +19,6 @@
         }
       },
       "coverlet.collector/6.0.2": {},
-      "Microsoft.AspNetCore.OpenApi/8.0.14": {
-        "dependencies": {
-          "Microsoft.OpenApi": "1.4.3"
-        },
-        "runtime": {
-          "lib/net8.0/Microsoft.AspNetCore.OpenApi.dll": {
-            "assemblyVersion": "8.0.14.0",
-            "fileVersion": "8.0.1425.11221"
-          }
-        }
-      },
       "Microsoft.CodeCoverage/17.12.0": {
         "runtime": {
           "lib/netcoreapp3.1/Microsoft.VisualStudio.CodeCoverage.Shim.dll": {
@@ -42,14 +31,6 @@
         "dependencies": {
           "Microsoft.CodeCoverage": "17.12.0",
           "Microsoft.TestPlatform.TestHost": "17.12.0"
-        }
-      },
-      "Microsoft.OpenApi/1.4.3": {
-        "runtime": {
-          "lib/netstandard2.0/Microsoft.OpenApi.dll": {
-            "assemblyVersion": "1.4.3.0",
-            "fileVersion": "1.4.3.0"
-          }
         }
       },
       "Microsoft.TestPlatform.ObjectModel/17.12.0": {
@@ -361,9 +342,6 @@
       },
       "xunit.runner.visualstudio/2.8.2": {},
       "MyTestApp.Api/1.0.0": {
-        "dependencies": {
-          "Microsoft.AspNetCore.OpenApi": "8.0.14"
-        },
         "runtime": {
           "MyTestApp.Api.dll": {
             "assemblyVersion": "1.0.0.0",
@@ -386,13 +364,6 @@
       "path": "coverlet.collector/6.0.2",
       "hashPath": "coverlet.collector.6.0.2.nupkg.sha512"
     },
-    "Microsoft.AspNetCore.OpenApi/8.0.14": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-Sar0lozRpDmlAfzRNHtr8hC/6ImdcZMYA1JLoEaW0bmRvQdPpsN0orHYGsY+/LYS3q603ZomxsYpXj1Ow+sBTA==",
-      "path": "microsoft.aspnetcore.openapi/8.0.14",
-      "hashPath": "microsoft.aspnetcore.openapi.8.0.14.nupkg.sha512"
-    },
     "Microsoft.CodeCoverage/17.12.0": {
       "type": "package",
       "serviceable": true,
@@ -406,13 +377,6 @@
       "sha512": "sha512-kt/PKBZ91rFCWxVIJZSgVLk+YR+4KxTuHf799ho8WNiK5ZQpJNAEZCAWX86vcKrs+DiYjiibpYKdGZP6+/N17w==",
       "path": "microsoft.net.test.sdk/17.12.0",
       "hashPath": "microsoft.net.test.sdk.17.12.0.nupkg.sha512"
-    },
-    "Microsoft.OpenApi/1.4.3": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-rURwggB+QZYcSVbDr7HSdhw/FELvMlriW10OeOzjPT7pstefMo7IThhtNtDudxbXhW+lj0NfX72Ka5EDsG8x6w==",
-      "path": "microsoft.openapi/1.4.3",
-      "hashPath": "microsoft.openapi.1.4.3.nupkg.sha512"
     },
     "Microsoft.TestPlatform.ObjectModel/17.12.0": {
       "type": "package",

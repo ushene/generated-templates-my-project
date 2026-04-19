@@ -15,9 +15,7 @@ C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-a
 C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\tests\MyTestApp.Tests\bin\Debug\net8.0\MyTestApp.Tests.runtimeconfig.json
 C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\tests\MyTestApp.Tests\bin\Debug\net8.0\MyTestApp.Tests.dll
 C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\tests\MyTestApp.Tests\bin\Debug\net8.0\MyTestApp.Tests.pdb
-C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\tests\MyTestApp.Tests\bin\Debug\net8.0\Microsoft.AspNetCore.OpenApi.dll
 C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\tests\MyTestApp.Tests\bin\Debug\net8.0\Microsoft.VisualStudio.CodeCoverage.Shim.dll
-C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\tests\MyTestApp.Tests\bin\Debug\net8.0\Microsoft.OpenApi.dll
 C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\tests\MyTestApp.Tests\bin\Debug\net8.0\Microsoft.TestPlatform.CoreUtilities.dll
 C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\tests\MyTestApp.Tests\bin\Debug\net8.0\Microsoft.TestPlatform.PlatformAbstractions.dll
 C:\Users\lenoy\OneDrive\Desktop\generated-templates-my-project (1)\test-dotnet-app\tests\MyTestApp.Tests\bin\Debug\net8.0\Microsoft.VisualStudio.TestPlatform.ObjectModel.dll
