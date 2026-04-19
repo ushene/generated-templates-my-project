@@ -42,6 +42,20 @@ on:
         required: false
         type: string
         default: ''
+      solution-path:
+        description: 'Path to the solution directory (e.g. my-app)'
+        required: false
+        type: string
+        default: '.'
+      project-path:
+        description: 'Path to the main project .csproj file (e.g. my-app/src/App.Api/App.Api.csproj)'
+        required: true
+        type: string
+      health-check-path:
+        description: 'Health check endpoint path for readiness (e.g. /api/health)'
+        required: false
+        type: string
+        default: '/api/health'
     
     outputs:
       artifact_version:
@@ -119,7 +133,7 @@ jobs:
       # Step 4: Restore dependencies
       - name: Restore dependencies
         shell: pwsh
-        working-directory: test-dotnet-app
+        working-directory: ${{ inputs.solution-path }}
         run: |
           Write-Host "Restoring project dependencies..." -ForegroundColor Cyan
           dotnet restore
@@ -127,7 +141,7 @@ jobs:
       # Step 5: Build application
       - name: Build application
         shell: pwsh
-        working-directory: test-dotnet-app
+        working-directory: ${{ inputs.solution-path }}
         run: |
           Write-Host "Building application in $env:BUILD_CONFIGURATION mode..." -ForegroundColor Cyan
           dotnet build --configuration $env:BUILD_CONFIGURATION --no-restore
@@ -136,7 +150,7 @@ jobs:
       - name: Run unit tests
         if: ${{ !inputs.skip-tests }}
         shell: pwsh
-        working-directory: test-dotnet-app
+        working-directory: ${{ inputs.solution-path }}
         run: |
           Write-Host "Running unit tests..." -ForegroundColor Cyan
           dotnet test --no-build --configuration $env:BUILD_CONFIGURATION --logger "trx;LogFileName=test-results.trx" --collect:"XPlat Code Coverage"
@@ -163,7 +177,7 @@ jobs:
       - name: Run Snyk security scan
         if: ${{ !inputs.skip-security-scan }}
         shell: pwsh
-        working-directory: test-dotnet-app/src/MyTestApp.Api
+        working-directory: ${{ inputs.solution-path }}
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
@@ -181,8 +195,8 @@ jobs:
         run: |
           Write-Host "Packaging application..." -ForegroundColor Cyan
           $packageName = "$env:APP_NAME-$env:APP_VERSION"
-          $publishDir = "test-dotnet-app/publish"
-          dotnet publish test-dotnet-app/src/MyTestApp.Api/MyTestApp.Api.csproj --configuration $env:BUILD_CONFIGURATION --output $publishDir --no-build
+          $publishDir = "publish-output"
+          dotnet publish "${{ inputs.project-path }}" --configuration $env:BUILD_CONFIGURATION --output $publishDir --no-build
           New-Item -ItemType Directory -Path "artifacts" -Force | Out-Null
           Compress-Archive -Path "$publishDir\*" -DestinationPath "artifacts\$packageName.zip"
           Write-Host "Package created: artifacts/$packageName.zip" -ForegroundColor Green

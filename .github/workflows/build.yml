@@ -12,6 +12,7 @@ on:
     branches:
       - main
       - develop
+      - parameterized-backup
       - 'feature/**'
       - 'release/**'
   # Uncomment below to enable automatic workflow runs on pull requests
@@ -37,12 +38,17 @@ on:
         type: boolean
         default: false
 
-# Centralized configuration
+# Centralized configuration — Update these values for your application
 env:
   APP_NAME: 'MyTestApp'
   JFROG_REPOSITORY: 'my-app-local'
   BUILD_CONFIGURATION: 'Release'
   DOTNET_VERSION: '8.x'
+  SOLUTION_PATH: 'test-dotnet-app'
+  PROJECT_PATH: 'test-dotnet-app/src/MyTestApp.Api/MyTestApp.Api.csproj'
+  HEALTH_CHECK_PATH: '/api/health'
+  READINESS_CHECK_PATH: '/api/ready'
+  DOTNET_RUNTIME_VERSION: 'DOTNETCORE|8.0'
 
 jobs:
   # Job 0: Setup configuration (workaround for env limitation in reusable workflows)
@@ -54,6 +60,11 @@ jobs:
       jfrog-repository: ${{ steps.set-config.outputs.jfrog-repository }}
       build-configuration: ${{ steps.set-config.outputs.build-configuration }}
       dotnet-version: ${{ steps.set-config.outputs.dotnet-version }}
+      solution-path: ${{ steps.set-config.outputs.solution-path }}
+      project-path: ${{ steps.set-config.outputs.project-path }}
+      health-check-path: ${{ steps.set-config.outputs.health-check-path }}
+      readiness-check-path: ${{ steps.set-config.outputs.readiness-check-path }}
+      dotnet-runtime-version: ${{ steps.set-config.outputs.dotnet-runtime-version }}
     steps:
       - name: Set configuration outputs
         id: set-config
@@ -62,6 +73,11 @@ jobs:
           echo "jfrog-repository=${{ env.JFROG_REPOSITORY }}" >> $GITHUB_OUTPUT
           echo "build-configuration=${{ env.BUILD_CONFIGURATION }}" >> $GITHUB_OUTPUT
           echo "dotnet-version=${{ env.DOTNET_VERSION }}" >> $GITHUB_OUTPUT
+          echo "solution-path=${{ env.SOLUTION_PATH }}" >> $GITHUB_OUTPUT
+          echo "project-path=${{ env.PROJECT_PATH }}" >> $GITHUB_OUTPUT
+          echo "health-check-path=${{ env.HEALTH_CHECK_PATH }}" >> $GITHUB_OUTPUT
+          echo "readiness-check-path=${{ env.READINESS_CHECK_PATH }}" >> $GITHUB_OUTPUT
+          echo "dotnet-runtime-version=${{ env.DOTNET_RUNTIME_VERSION }}" >> $GITHUB_OUTPUT
 
   # Job 1: Build using reusable CI workflow
   build:
@@ -75,6 +91,8 @@ jobs:
       skip-tests: ${{ inputs.skip_tests || false }}
       skip-security-scan: false
       jfrog-repository: ${{ needs.config.outputs.jfrog-repository }}
+      solution-path: ${{ needs.config.outputs.solution-path }}
+      project-path: ${{ needs.config.outputs.project-path }}
     secrets:
       JFROG_URL: ${{ secrets.JFROG_URL }}
       JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
@@ -100,6 +118,9 @@ jobs:
       resource-group: ${{ vars.DEV_RESOURCE_GROUP }}
       resource-name: ${{ vars.DEV_RESOURCE_NAME }}
       resource-type: 'webapp'
+      health-check-path: ${{ needs.config.outputs.health-check-path }}
+      readiness-check-path: ${{ needs.config.outputs.readiness-check-path }}
+      dotnet-runtime-version: ${{ needs.config.outputs.dotnet-runtime-version }}
     secrets: inherit
   
   # Job 3: Deploy to staging (disabled)
@@ -116,6 +137,9 @@ jobs:
   #     resource-group: ${{ vars.STAGING_RESOURCE_GROUP }}
   #     resource-name: ${{ vars.STAGING_RESOURCE_NAME }}
   #     resource-type: 'webapp'
+  #     health-check-path: ${{ needs.config.outputs.health-check-path }}
+  #     readiness-check-path: ${{ needs.config.outputs.readiness-check-path }}
+  #     dotnet-runtime-version: ${{ needs.config.outputs.dotnet-runtime-version }}
   #   secrets: inherit
   
   # Job 4: Deploy to production (disabled)
@@ -132,4 +156,7 @@ jobs:
   #     resource-group: ${{ vars.PROD_RESOURCE_GROUP }}
   #     resource-name: ${{ vars.PROD_RESOURCE_NAME }}
   #     resource-type: 'webapp'
+  #     health-check-path: ${{ needs.config.outputs.health-check-path }}
+  #     readiness-check-path: ${{ needs.config.outputs.readiness-check-path }}
+  #     dotnet-runtime-version: ${{ needs.config.outputs.dotnet-runtime-version }}
   #   secrets: inherit

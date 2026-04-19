@@ -47,6 +47,21 @@ on:
         required: false
         type: string
         default: 'webapp'
+      health-check-path:
+        description: 'Health check endpoint path (e.g. /api/health)'
+        required: false
+        type: string
+        default: '/api/health'
+      readiness-check-path:
+        description: 'Readiness check endpoint path (e.g. /api/ready)'
+        required: false
+        type: string
+        default: '/api/ready'
+      dotnet-runtime-version:
+        description: 'Expected Azure App Service .NET runtime (e.g. DOTNETCORE|8.0)'
+        required: false
+        type: string
+        default: 'DOTNETCORE|8.0'
     
     outputs:
       deployment-url:
@@ -162,8 +177,8 @@ jobs:
               --query "linuxFxVersion" -o tsv
             
             Write-Host "App Service runtime: $linuxFxVersion" -ForegroundColor Cyan
-            if ($linuxFxVersion -and $linuxFxVersion -ne "DOTNETCORE|8.0") {
-              throw "App Service runtime '$linuxFxVersion' does not match this package target framework (net8.0). Set the web app runtime to DOTNETCORE|8.0 or retarget the app."
+            if ($linuxFxVersion -and $linuxFxVersion -ne "${{ inputs.dotnet-runtime-version }}") {
+              throw "App Service runtime '$linuxFxVersion' does not match expected runtime '${{ inputs.dotnet-runtime-version }}'. Update the web app runtime or the workflow input."
             }
             
             Write-Host "Uploading package with az webapp deploy..." -ForegroundColor Yellow
@@ -224,11 +239,11 @@ jobs:
             Write-Host "Health check attempt $retryCount/$maxRetries (elapsed: ${elapsedSeconds}s)..." -ForegroundColor Yellow
             
             try {
-              $readyResponse = Invoke-WebRequest -Uri "$appUrl/api/ready" @iwrParams
+              $readyResponse = Invoke-WebRequest -Uri "$appUrl${{ inputs.readiness-check-path }}" @iwrParams
               if ($readyResponse.StatusCode -eq 200) {
                 Write-Host "Readiness check passed" -ForegroundColor Green
                 
-                $healthResponse = Invoke-WebRequest -Uri "$appUrl/api/health" @iwrParams
+                $healthResponse = Invoke-WebRequest -Uri "$appUrl${{ inputs.health-check-path }}" @iwrParams
                 if ($healthResponse.StatusCode -eq 200) {
                   Write-Host "Health check passed" -ForegroundColor Green
                   exit 0
